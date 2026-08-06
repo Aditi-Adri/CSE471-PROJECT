@@ -140,7 +140,39 @@ function makeAvailability(isAvailableNow: boolean) {
   }));
 }
 
+/**
+ * This script deletes existing categories/workers/search logs before
+ * reseeding — safe on a solo local database, dangerous on a database the
+ * whole team shares (it would wipe teammates' real data too). If
+ * DATABASE_URL doesn't obviously point at localhost, refuse to run
+ * unless it's explicitly confirmed.
+ */
+function assertSafeToWipe() {
+  const url = process.env.DATABASE_URL ?? "";
+  const looksLocal = /localhost|127\.0\.0\.1/i.test(url);
+  const confirmed = process.env.CONFIRM_SEED === "yes" || process.argv.includes("--force");
+
+  if (!looksLocal && !confirmed) {
+    console.error(
+      [
+        "\n⚠️  Refusing to run: DATABASE_URL doesn't look like a local database.",
+        "This script DELETES all existing categories, workers and search logs",
+        "before reseeding — if this is a database your team shares, that would",
+        "wipe everyone's data, not just yours.",
+        "",
+        "If you're sure you want to reset the SHARED database on purpose,",
+        "warn your teammates first, then re-run with:",
+        "",
+        "  CONFIRM_SEED=yes npm run db:seed\n",
+      ].join("\n")
+    );
+    process.exit(1);
+  }
+}
+
 async function main() {
+  assertSafeToWipe();
+
   console.log("Seeding HireLocal database (deterministic, seed=471)...\n");
 
   // Clean slate — makes this script safely re-runnable.
