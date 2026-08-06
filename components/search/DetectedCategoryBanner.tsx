@@ -4,6 +4,7 @@ const METHOD_LABEL: Record<SearchApiResponse["matchMethod"], string> = {
   AI: "Gemini AI",
   KEYWORD: "keyword engine",
   MANUAL_FILTER: "manual filter",
+  NONE: "no filter",
 };
 
 export function DetectedCategoryBanner({

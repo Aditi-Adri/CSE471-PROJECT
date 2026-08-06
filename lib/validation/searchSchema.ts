@@ -8,10 +8,13 @@ export const sortOptions = ["RELEVANCE", "RATING", "PRICE_LOW", "PRICE_HIGH", "E
 export type SortOption = (typeof sortOptions)[number];
 
 export const searchRequestSchema = z.object({
+  // Empty string is a valid, meaningful value here — it's what powers
+  // the "browse everyone" default view when a customer hasn't typed
+  // anything yet. Only a *non-empty-but-too-short* query (e.g. "a") is
+  // rejected, via the refine below.
   query: z
     .string()
     .trim()
-    .min(2, "Describe the problem in a few words, e.g. \"water tap is leaking\".")
     .max(300, "Keep it under 300 characters.")
     .optional()
     .default(""),
@@ -30,8 +33,8 @@ export const searchRequestSchema = z.object({
   page: z.number().int().min(1).optional().default(1),
   pageSize: z.number().int().min(1).max(50).optional().default(12),
 })
-  .refine((data) => data.query.length >= 2 || !!data.filters.categoryId, {
-    message: "Either type a description or pick a category filter.",
+  .refine((data) => data.query.length === 0 || data.query.length >= 2, {
+    message: "Describe the problem in a few words, e.g. \"water tap is leaking\".",
     path: ["query"],
   })
   .refine(

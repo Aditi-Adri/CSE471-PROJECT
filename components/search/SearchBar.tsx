@@ -1,21 +1,23 @@
 "use client";
 
 const EXAMPLE_QUERIES = [
-  "water tap is leaking in kitchen",
-  "AC is making noise",
-  "need someone for CCTV installation",
-  "gas stove is not lighting",
+  { icon: "💧", text: "water tap is leaking in kitchen" },
+  { icon: "❄️", text: "AC is making noise" },
+  { icon: "📹", text: "need someone for CCTV installation" },
+  { icon: "🔥", text: "gas stove is not lighting" },
 ];
 
 export function SearchBar({
   value,
   onChange,
   onSubmit,
+  onQuickSearch,
   loading,
 }: {
   value: string;
   onChange: (value: string) => void;
   onSubmit: () => void;
+  onQuickSearch: (text: string) => void;
   loading: boolean;
 }) {
   return (
@@ -47,16 +49,19 @@ export function SearchBar({
         </button>
       </form>
 
-      <div className="flex flex-wrap gap-2">
-        <span className="text-xs text-zinc-500 dark:text-zinc-400">Try:</span>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+          Popular searches:
+        </span>
         {EXAMPLE_QUERIES.map((example) => (
           <button
-            key={example}
+            key={example.text}
             type="button"
-            onClick={() => onChange(example)}
-            className="rounded-full border border-zinc-200 px-3 py-1 text-xs text-zinc-600 transition hover:border-brand-400 hover:text-brand-700 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-brand-600 dark:hover:text-brand-400"
+            onClick={() => onQuickSearch(example.text)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs text-zinc-600 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-brand-700 dark:hover:bg-brand-950/40 dark:hover:text-brand-400"
           >
-            {example}
+            <span aria-hidden="true">{example.icon}</span>
+            {example.text}
           </button>
         ))}
       </div>

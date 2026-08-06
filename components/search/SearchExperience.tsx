@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { SearchBar } from "./SearchBar";
 import { FilterPanel } from "./FilterPanel";
 import { WorkerCard } from "./WorkerCard";
@@ -13,9 +14,20 @@ import type { SortOption } from "@/lib/validation/searchSchema";
 import { EMPTY_FILTERS, type CategoryOption, type SearchApiResponse, type SearchFiltersState } from "@/lib/types/search";
 
 export function SearchExperience() {
-  const [queryInput, setQueryInput] = useState("");
-  const [submittedQuery, setSubmittedQuery] = useState("");
-  const [filters, setFilters] = useState<SearchFiltersState>(EMPTY_FILTERS);
+  // Seed initial state from the URL — this is what makes links like
+  // "/search?q=..." (hero search box) and "/search?categoryId=..."
+  // (homepage category grid) actually land pre-filled, instead of
+  // silently dropping the intent the customer already expressed.
+  const searchParams = useSearchParams();
+  const initialQuery = searchParams.get("q") ?? "";
+  const initialCategoryId = searchParams.get("categoryId");
+
+  const [queryInput, setQueryInput] = useState(initialQuery);
+  const [submittedQuery, setSubmittedQuery] = useState(initialQuery);
+  const [filters, setFilters] = useState<SearchFiltersState>({
+    ...EMPTY_FILTERS,
+    categoryId: initialCategoryId,
+  });
   const [sort, setSort] = useState<SortOption>("RELEVANCE");
   const [page, setPage] = useState(1);
   const [retryNonce, setRetryNonce] = useState(0);
@@ -44,14 +56,12 @@ export function SearchExperience() {
     [submittedQuery, debouncedFilters, sort, page]
   );
   const attemptKey = `${requestUrl}#${retryNonce}`;
+  const loading = attemptKey !== lastHandledKey;
 
-  const hasSearchIntent = submittedQuery.trim().length >= 2 || !!debouncedFilters.categoryId;
-  const hasSearchedOnce = submittedQuery.trim().length >= 2 || !!filters.categoryId;
-  const loading = hasSearchIntent && attemptKey !== lastHandledKey;
-
+  // There is always something to show: every technician by default,
+  // narrowed as soon as the customer types a description or sets a
+  // filter — so this effect runs unconditionally, on mount included.
   useEffect(() => {
-    if (!hasSearchIntent) return;
-
     const controller = new AbortController();
 
     fetch(requestUrl, { signal: controller.signal })
@@ -71,15 +81,16 @@ export function SearchExperience() {
       });
 
     return () => controller.abort();
-  }, [attemptKey, hasSearchIntent, requestUrl]);
-
-  // Once search intent disappears (query cleared, no category filter),
-  // stop showing stale results/errors from the previous search.
-  const visibleResponse = hasSearchIntent ? response : null;
-  const visibleError = hasSearchIntent ? error : null;
+  }, [attemptKey, requestUrl]);
 
   function handleSubmitSearch() {
     setSubmittedQuery(queryInput);
+    setPage(1);
+  }
+
+  function handleQuickSearch(text: string) {
+    setQueryInput(text);
+    setSubmittedQuery(text);
     setPage(1);
   }
 
@@ -100,12 +111,18 @@ export function SearchExperience() {
           Find a verified local technician
         </h1>
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          Describe the problem in your own words — we&apos;ll match it to the right service
-          category and show you nearby, background-checked workers.
+          Browse every verified technician below, or describe the problem in your own
+          words and we&apos;ll match and re-sort the list instantly.
         </p>
       </header>
 
-      <SearchBar value={queryInput} onChange={setQueryInput} onSubmit={handleSubmitSearch} loading={loading} />
+      <SearchBar
+        value={queryInput}
+        onChange={setQueryInput}
+        onSubmit={handleSubmitSearch}
+        onQuickSearch={handleQuickSearch}
+        loading={loading}
+      />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[260px_1fr]">
         <FilterPanel
@@ -117,44 +134,41 @@ export function SearchExperience() {
         />
 
         <div className="flex flex-col gap-4">
-          {visibleResponse?.detectedCategory && (
+          {response?.detectedCategory && (
             <DetectedCategoryBanner
-              category={visibleResponse.detectedCategory}
-              method={visibleResponse.matchMethod}
-              confidence={visibleResponse.matchConfidence}
+              category={response.detectedCategory}
+              method={response.matchMethod}
+              confidence={response.matchConfidence}
             />
-          )}
-
-          {!hasSearchedOnce && !loading && (
-            <EmptyState message='Describe a problem above (e.g. "water tap is leaking in kitchen") or pick a category filter to get started.' />
           )}
 
           {loading && <ResultsSkeleton />}
 
-          {visibleError && !loading && (
-            <ErrorState message={visibleError} onRetry={() => setRetryNonce((n) => n + 1)} />
+          {error && !loading && (
+            <ErrorState message={error} onRetry={() => setRetryNonce((n) => n + 1)} />
           )}
 
-          {!loading && !visibleError && visibleResponse && (
+          {!loading && !error && response && (
             <>
               <div className="flex items-center justify-between text-sm text-zinc-500 dark:text-zinc-400">
                 <span>
-                  {visibleResponse.total} {visibleResponse.total === 1 ? "technician" : "technicians"} found
+                  {response.total} {response.total === 1 ? "technician" : "technicians"} found
+                  {response.matchMethod === "NONE" && " · sorted by trust & rating"}
                 </span>
-                <span>Search took {visibleResponse.durationMs}ms</span>
+                <span>Search took {response.durationMs}ms</span>
               </div>
 
-              {visibleResponse.results.length === 0 ? (
+              {response.results.length === 0 ? (
                 <EmptyState message="No technicians match those filters yet. Try widening your budget or removing a filter." />
               ) : (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                  {visibleResponse.results.map((worker) => (
+                  {response.results.map((worker) => (
                     <WorkerCard key={worker.id} worker={worker} />
                   ))}
                 </div>
               )}
 
-              {visibleResponse.totalPages > 1 && (
+              {response.totalPages > 1 && (
                 <div className="flex items-center justify-center gap-3 pt-2">
                   <button
                     type="button"
@@ -165,12 +179,12 @@ export function SearchExperience() {
                     ← Prev
                   </button>
                   <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                    Page {visibleResponse.page} of {visibleResponse.totalPages}
+                    Page {response.page} of {response.totalPages}
                   </span>
                   <button
                     type="button"
-                    disabled={page >= visibleResponse.totalPages}
-                    onClick={() => setPage((p) => Math.min(visibleResponse.totalPages, p + 1))}
+                    disabled={page >= response.totalPages}
+                    onClick={() => setPage((p) => Math.min(response.totalPages, p + 1))}
                     className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm transition hover:border-brand-400 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-zinc-300 disabled:hover:text-inherit dark:border-zinc-700 dark:hover:border-brand-600 dark:hover:text-brand-400 dark:disabled:hover:border-zinc-700"
                   >
                     Next →

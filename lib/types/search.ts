@@ -41,7 +41,7 @@ export type DetectedCategory = { id: string; name: string; icon: string } | null
 export type SearchApiResponse = {
   query: string;
   detectedCategory: DetectedCategory;
-  matchMethod: "AI" | "KEYWORD" | "MANUAL_FILTER";
+  matchMethod: "AI" | "KEYWORD" | "MANUAL_FILTER" | "NONE";
   matchConfidence: number | null;
   sort: SortOption;
   page: number;

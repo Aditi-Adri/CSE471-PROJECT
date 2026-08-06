@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { mapQueryToCategory } from "@/lib/ai/categoryMapper";
 import { buildWorkerOrderBy, buildWorkerWhere } from "@/lib/search/buildWorkerQuery";
@@ -47,7 +48,7 @@ export async function GET(request: Request) {
 
   if (!parsed.success) {
     return Response.json(
-      { error: "Invalid search request.", issues: parsed.error.flatten() },
+      { error: "Invalid search request.", issues: z.treeifyError(parsed.error) },
       { status: 400 }
     );
   }
@@ -57,7 +58,9 @@ export async function GET(request: Request) {
   // --- Step 1: resolve category -----------------------------------
   let resolvedCategoryId = filters.categoryId ?? null;
   let detectedCategory: { id: string; name: string; icon: string } | null = null;
-  let matchMethod: "AI" | "KEYWORD" | "MANUAL_FILTER" = "MANUAL_FILTER";
+  // "NONE" = no query and no category filter at all — the default
+  // "browse every verified technician" view a customer lands on.
+  let matchMethod: "AI" | "KEYWORD" | "MANUAL_FILTER" | "NONE" = "NONE";
   let matchConfidence: number | null = null;
 
   if (resolvedCategoryId) {
@@ -67,6 +70,7 @@ export async function GET(request: Request) {
     });
     if (category) {
       detectedCategory = category;
+      matchMethod = "MANUAL_FILTER";
       matchConfidence = 1;
     } else {
       resolvedCategoryId = null;
@@ -163,7 +167,12 @@ export async function GET(request: Request) {
   const durationMs = Date.now() - startedAt;
 
   // --- Step 3: log the search (best-effort, never blocks the response) --
-  if (query.length >= 2) {
+  // Skip logging the default "browse everyone" view (matchMethod "NONE")
+  // — only log when the customer actually expressed some intent, via
+  // text or an explicit category filter. The `!== "NONE"` check (rather
+  // than re-checking query.length) also lets TypeScript narrow
+  // `matchMethod` to Prisma's MatchMethod enum for the write below.
+  if (matchMethod !== "NONE") {
     prisma.searchLog
       .create({
         data: {
