@@ -160,7 +160,7 @@ export function SearchExperience() {
                     type="button"
                     disabled={page <= 1}
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700"
+                    className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm transition hover:border-brand-400 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-zinc-300 disabled:hover:text-inherit dark:border-zinc-700 dark:hover:border-brand-600 dark:hover:text-brand-400 dark:disabled:hover:border-zinc-700"
                   >
                     ← Prev
                   </button>
@@ -171,7 +171,7 @@ export function SearchExperience() {
                     type="button"
                     disabled={page >= visibleResponse.totalPages}
                     onClick={() => setPage((p) => Math.min(visibleResponse.totalPages, p + 1))}
-                    className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700"
+                    className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm transition hover:border-brand-400 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-zinc-300 disabled:hover:text-inherit dark:border-zinc-700 dark:hover:border-brand-600 dark:hover:text-brand-400 dark:disabled:hover:border-zinc-700"
                   >
                     Next →
                   </button>

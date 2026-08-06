@@ -42,7 +42,7 @@ export default async function WorkerProfilePage({
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-10 sm:px-6 lg:px-8">
-      <Link href="/search" className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
+      <Link href="/search" className="text-sm text-zinc-500 transition hover:text-brand-700 dark:hover:text-brand-400">
         ← Back to search
       </Link>
 
@@ -76,7 +76,7 @@ export default async function WorkerProfilePage({
               key={category.id}
               className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
                 isPrimary
-                  ? "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                  ? "bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300"
                   : "border border-zinc-200 text-zinc-500 dark:border-zinc-700 dark:text-zinc-400"
               }`}
             >
@@ -120,8 +120,8 @@ export default async function WorkerProfilePage({
         )}
 
         <p className="rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-500 dark:bg-zinc-950 dark:text-zinc-500">
-          Booking, chat and payment open up in later modules of this project — this page is the
-          read-only profile view for Module 1&apos;s search feature.
+          Direct booking, in-app chat and secure payment are launching soon — for now, use this
+          profile to compare verified technicians before reaching out.
         </p>
       </div>
     </div>

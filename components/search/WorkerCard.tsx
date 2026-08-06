@@ -9,9 +9,15 @@ import type { WorkerResult } from "@/lib/types/search";
 export function WorkerCard({ worker }: { worker: WorkerResult }) {
   const primaryCategory = worker.categories.find((c) => c.isPrimary) ?? worker.categories[0];
   const secondaryCategories = worker.categories.filter((c) => c.id !== primaryCategory?.id);
+  const isTopRated = worker.ratingAvg >= 4.7 && worker.ratingCount >= 20;
 
   return (
-    <article className="flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900">
+    <article className="group relative flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-lg dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-brand-800">
+      {isTopRated && (
+        <span className="absolute -top-2.5 right-4 inline-flex items-center gap-1 rounded-full bg-amber-500 px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm">
+          ★ Top rated
+        </span>
+      )}
       <div className="flex items-start gap-3">
         <Avatar name={worker.name} seed={worker.avatarSeed} size={52} />
         <div className="min-w-0 flex-1">
@@ -74,7 +80,7 @@ export function WorkerCard({ worker }: { worker: WorkerResult }) {
 
       <Link
         href={`/workers/${worker.id}`}
-        className="mt-auto inline-flex items-center justify-center rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
+        className="mt-auto inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
       >
         View full profile
       </Link>

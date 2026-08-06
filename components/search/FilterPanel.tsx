@@ -27,7 +27,7 @@ export function FilterPanel({
   onSortChange: (sort: SortOption) => void;
 }) {
   return (
-    <aside className="flex flex-col gap-5 rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+    <aside className="flex h-fit flex-col gap-5 rounded-2xl border border-zinc-200 bg-white p-5 lg:sticky lg:top-24 dark:border-zinc-800 dark:bg-zinc-900">
       <div>
         <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-50">Filters</h2>
       </div>
@@ -123,7 +123,7 @@ export function FilterPanel({
           type="checkbox"
           checked={filters.availableNow}
           onChange={(e) => onChange({ ...filters, availableNow: e.target.checked })}
-          className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900 dark:border-zinc-600 dark:bg-zinc-800"
+          className="h-4 w-4 rounded border-zinc-300 text-brand-600 focus:ring-brand-600 dark:border-zinc-600 dark:bg-zinc-800"
         />
         Available right now
       </label>
@@ -146,7 +146,7 @@ export function FilterPanel({
 }
 
 const selectClass =
-  "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:border-zinc-100 dark:focus:ring-zinc-100";
+  "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-brand-600 focus:ring-1 focus:ring-brand-600 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:border-brand-500 dark:focus:ring-brand-500";
 
 function FilterField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
