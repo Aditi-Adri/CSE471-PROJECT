@@ -11,3 +11,170 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+// =====================================================================
+// MODULE 1 -> FEATURE 2 (Adri): Smart Text Search, Contextual Filtering
+// & AI Category Mapping.
+//
+// Only the models this feature needs to function are defined below
+// (User is intentionally minimal — full auth/RBAC/profile fields are
+// the shared "Common Workflows" build and will be extended by the team
+// in the same models rather than duplicated).
+// =====================================================================
+
+enum Role {
+  CUSTOMER
+  WORKER
+  CORPORATE
+  ADMIN
+}
+
+/// Three-tier trust badge from the Worker Verification feature (Module 1
+/// Feature 1). Stored here because search results are ranked by it.
+enum VerificationTier {
+  UNVERIFIED
+  TIER1_ID_VERIFIED
+  TIER2_SKILL_TESTED
+  TIER3_POLICE_CLEARED
+}
+
+/// Service areas the platform currently covers. Kept as an enum (rather
+/// than a free-text field) so filtering/indexing stays fast and clean.
+enum DhakaArea {
+  GULSHAN
+  BANANI
+  BARIDHARA
+  DHANMONDI
+  UTTARA
+  MIRPUR
+  MOHAMMADPUR
+  BASHUNDHARA
+  BADDA
+  RAMPURA
+  MOTIJHEEL
+  OLD_DHAKA
+  WARI
+  LALMATIA
+  FARMGATE
+  TEJGAON
+  KHILGAON
+  MALIBAGH
+  JATRABARI
+  MOHAKHALI
+  BANASREE
+  SAVAR
+}
+
+/// How a search query was mapped to a category — lets us prove, and
+/// measure, that the free keyword engine is doing most of the work and
+/// the paid-tier-free LLM path is only used when explicitly enabled.
+enum MatchMethod {
+  KEYWORD
+  AI
+  MANUAL_FILTER
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  phone        String?  @unique
+  passwordHash String?
+  role         Role     @default(CUSTOMER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  worker Worker?
+
+  @@index([role])
+}
+
+/// A bookable service type (Plumbing, Electrical, ...). `keywords` powers
+/// the free, zero-cost fallback classifier in lib/ai/keywordEngine.ts.
+model ServiceCategory {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  description String
+  icon        String
+  keywords    String[]
+  createdAt   DateTime @default(now())
+
+  workers WorkerCategory[]
+
+  @@index([slug])
+}
+
+model Worker {
+  id               String           @id @default(cuid())
+  userId           String           @unique
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  headline         String
+  bio              String
+  area             DhakaArea
+  addressDetail    String
+  hourlyRateMinBdt Int
+  hourlyRateMaxBdt Int
+  verificationTier VerificationTier @default(UNVERIFIED)
+  yearsExperience  Int              @default(0)
+  isAvailableNow   Boolean          @default(true)
+  ratingAvg        Float            @default(0)
+  ratingCount      Int              @default(0)
+  completedJobs    Int              @default(0)
+  avatarSeed       String
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  categories   WorkerCategory[]
+  availability AvailabilitySlot[]
+
+  @@index([area])
+  @@index([verificationTier])
+  @@index([isAvailableNow])
+  @@index([hourlyRateMinBdt, hourlyRateMaxBdt])
+}
+
+/// Many-to-many: a worker can list more than one active service category.
+model WorkerCategory {
+  id         String          @id @default(cuid())
+  workerId   String
+  worker     Worker          @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  categoryId String
+  category   ServiceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  isPrimary  Boolean         @default(false)
+
+  @@unique([workerId, categoryId])
+  @@index([categoryId])
+}
+
+/// Simple recurring weekly availability block, e.g. dayOfWeek=6 (Saturday)
+/// 9-18 — enough to power the "live availability" search filter without
+/// needing the full booking-calendar engine (that's a separate feature).
+model AvailabilitySlot {
+  id        String @id @default(cuid())
+  workerId  String
+  worker    Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  dayOfWeek Int
+  startHour Int
+  endHour   Int
+
+  @@index([workerId])
+  @@index([dayOfWeek])
+}
+
+/// Every search is logged for analytics/audit and to demonstrate, at
+/// review time, how often the keyword engine vs. the optional AI path
+/// resolved a query.
+model SearchLog {
+  id                 String      @id @default(cuid())
+  queryText          String
+  detectedCategoryId String?
+  matchMethod        MatchMethod
+  matchConfidence    Float?
+  resultCount        Int
+  durationMs         Int
+  createdAt          DateTime    @default(now())
+
+  @@index([createdAt])
+  @@index([detectedCategoryId])
+}
