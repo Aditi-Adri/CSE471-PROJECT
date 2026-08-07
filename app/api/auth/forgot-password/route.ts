@@ -48,12 +48,15 @@ export async function POST(request: Request) {
     // Google-only account — there's no password to reset. Tell *them*
     // (via email, not the HTTP response) rather than silently doing
     // nothing, since a confused legitimate user is the likely case.
+    // Best-effort: a shared Resend key in sandbox mode can only deliver
+    // to its own account's address, so a delivery failure here must
+    // never surface as a broken endpoint for whoever's testing this.
     await sendEmail({
       to: user.email,
       subject: "About your HireLocal sign-in",
       text: `Hi ${user.name},\n\nYou (or someone) requested a password reset for this email on HireLocal, but this account signs in with Google — there's no password to reset. Use "Continue with Google" on the login page instead.\n\n— HireLocal`,
       html: `<p>Hi ${user.name},</p><p>You (or someone) requested a password reset for this email on HireLocal, but this account signs in with Google — there's no password to reset. Use "Continue with Google" on the login page instead.</p>`,
-    });
+    }).catch((err) => console.error("Failed to send 'use Google instead' email:", err));
     return Response.json(GENERIC_RESPONSE);
   }
 
@@ -72,7 +75,13 @@ export async function POST(request: Request) {
   const origin = process.env.NEXTAUTH_URL ?? new URL(request.url).origin;
   const resetUrl = `${origin}/reset-password?token=${raw}`;
   const { subject, html, text } = passwordResetEmail(user.name, resetUrl);
-  await sendEmail({ to: user.email, subject, html, text });
+
+  // Same best-effort reasoning as above: the reset token already
+  // exists in the DB regardless of whether the email actually lands,
+  // so a delivery failure shouldn't turn into a 500 for the requester.
+  await sendEmail({ to: user.email, subject, html, text }).catch((err) =>
+    console.error("Failed to send password-reset email:", err)
+  );
 
   return Response.json(GENERIC_RESPONSE);
 }
