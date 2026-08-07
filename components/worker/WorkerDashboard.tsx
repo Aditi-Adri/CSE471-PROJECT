@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { calculateTotal, formatCurrency } from "@/lib/booking/bookingFlow";
+import { useMemo } from "react";
+import { formatCurrency } from "@/lib/booking/bookingFlow";
 
 type WorkerDashboardProps = {
   worker: {
@@ -11,11 +11,6 @@ type WorkerDashboardProps = {
     hourlyRateMinBdt: number;
     hourlyRateMaxBdt: number;
   };
-};
-
-type PendingExtra = {
-  description: string;
-  amount: number;
 };
 
 export function WorkerDashboard({ worker }: WorkerDashboardProps) {

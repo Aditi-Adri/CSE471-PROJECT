@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { calculateTotal, formatCurrency, generateOtp } from "@/lib/booking/bookingFlow";
 
 type BookingConfirmWorker = {

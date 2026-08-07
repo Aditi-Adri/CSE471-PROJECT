@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { calculateTotal, formatCurrency, generateOtp } from "@/lib/booking/bookingFlow";
 
 type BookingFlowWorker = {
@@ -18,8 +18,15 @@ type PendingVariation = {
 };
 
 export function BookingFlow({ worker }: { worker: BookingFlowWorker }) {
-  const [savedAddress, setSavedAddress] = useState(worker.addressDetail);
-  const [addressDraft, setAddressDraft] = useState(worker.addressDetail);
+  // Lazy initializer (not an effect) — reading localStorage is a pure,
+  // side-effect-free lookup, so there's nothing to synchronize after
+  // mount; resolving it as part of the initial render avoids an extra
+  // render pass entirely instead of just deferring the setState call.
+  const [savedAddress, setSavedAddress] = useState(() => {
+    if (typeof window === "undefined") return worker.addressDetail;
+    return window.localStorage.getItem("hirelocal.saved-address") || worker.addressDetail;
+  });
+  const [addressDraft, setAddressDraft] = useState(savedAddress);
   const [otp, setOtp] = useState("");
   const [otpInput, setOtpInput] = useState("");
   const [arrivalVerified, setArrivalVerified] = useState(false);
@@ -28,15 +35,6 @@ export function BookingFlow({ worker }: { worker: BookingFlowWorker }) {
   const [pendingVariation, setPendingVariation] = useState<PendingVariation | null>(null);
   const [approvedExtra, setApprovedExtra] = useState(0);
   const [isCompleted, setIsCompleted] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const stored = window.localStorage.getItem("hirelocal.saved-address");
-    if (stored) {
-      setSavedAddress(stored);
-      setAddressDraft(stored);
-    }
-  }, []);
 
   const basePrice = useMemo(() => {
     const midpoint = Math.round((worker.hourlyRateMinBdt + worker.hourlyRateMaxBdt) / 2);
