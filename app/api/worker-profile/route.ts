@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/authOptions";
 import { prisma } from "@/lib/db";
 import { createWorkerProfileSchema } from "@/lib/validation/workerProfileSchema";
+import { withErrorHandling } from "@/lib/api/withErrorHandling";
 import type { DhakaArea } from "@/app/generated/prisma/client";
 
 /**
@@ -14,7 +15,7 @@ import type { DhakaArea } from "@/app/generated/prisma/client";
  * "finish setting up your worker profile" step, gating entry into the
  * verification flow.
  */
-export async function POST(request: Request) {
+export const POST = withErrorHandling(async (request: Request) => {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return Response.json({ error: "You must be signed in." }, { status: 401 });
@@ -70,4 +71,4 @@ export async function POST(request: Request) {
   });
 
   return Response.json({ worker }, { status: 201 });
-}
+});

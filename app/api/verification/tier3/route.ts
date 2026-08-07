@@ -6,6 +6,7 @@ import { checkRateLimit, getClientIp } from "@/lib/auth/rateLimit";
 import { tier3SubmitSchema } from "@/lib/validation/verificationSchemas";
 import { canSubmitTier3 } from "@/lib/verification/tierGating";
 import { getWorkerTierSnapshot } from "@/lib/verification/getTierSnapshot";
+import { withErrorHandling } from "@/lib/api/withErrorHandling";
 
 /**
  * POST /api/verification/tier3
@@ -15,7 +16,7 @@ import { getWorkerTierSnapshot } from "@/lib/verification/getTierSnapshot";
  * manual review — contacting references and checking an official
  * document isn't something this app can legitimately automate.
  */
-export async function POST(request: Request) {
+export const POST = withErrorHandling(async (request: Request) => {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return Response.json({ error: "You must be signed in." }, { status: 401 });
@@ -80,4 +81,4 @@ export async function POST(request: Request) {
   });
 
   return Response.json({ status: "PENDING" });
-}
+});

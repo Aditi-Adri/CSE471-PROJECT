@@ -8,6 +8,7 @@ import { canSubmitTier1 } from "@/lib/verification/tierGating";
 import { getWorkerTierSnapshot } from "@/lib/verification/getTierSnapshot";
 import { syncWorkerVerificationTier } from "@/lib/verification/applyTierApproval";
 import { AUTO_APPROVE_DISTANCE_THRESHOLD } from "@/lib/faceMatch/threshold";
+import { withErrorHandling } from "@/lib/api/withErrorHandling";
 
 /**
  * POST /api/verification/tier1
@@ -19,7 +20,7 @@ import { AUTO_APPROVE_DISTANCE_THRESHOLD } from "@/lib/faceMatch/threshold";
  * can lie about a boolean, it can't lower the number below the bar
  * without actually submitting a close-enough pair.
  */
-export async function POST(request: Request) {
+export const POST = withErrorHandling(async (request: Request) => {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return Response.json({ error: "You must be signed in." }, { status: 401 });
@@ -88,4 +89,4 @@ export async function POST(request: Request) {
     status: autoApproved ? "APPROVED" : "PENDING",
     autoApproved,
   });
-}
+});

@@ -1,4 +1,3 @@
-import * as faceapi from "@vladmandic/face-api";
 import { AUTO_APPROVE_DISTANCE_THRESHOLD } from "./threshold";
 
 /**
@@ -12,18 +11,36 @@ import { AUTO_APPROVE_DISTANCE_THRESHOLD } from "./threshold";
  * Model weights are bundled with the npm package and copied into
  * public/models/ (see package README note) rather than fetched from a
  * CDN, so this has no runtime dependency on a third-party host either.
+ *
+ * The library is imported dynamically, not at the top of this file —
+ * @vladmandic/face-api runs its own Node-vs-browser environment
+ * detection as soon as its module body executes, and doing that at
+ * static-import time means it runs the instant this file is first
+ * evaluated, before there's any guarantee of a stable, fully-hydrated
+ * browser tab. Deferring the import into the function that's only
+ * ever called from a real user action (selecting both photos) keeps
+ * that detection code from running any earlier than it has to.
  */
+type FaceApiModule = typeof import("@vladmandic/face-api");
 
-let modelsLoadedPromise: Promise<void> | null = null;
+let faceApiModulePromise: Promise<FaceApiModule> | null = null;
+let modelsLoadedPromise: Promise<FaceApiModule> | null = null;
 
-/** Loads the three models this feature needs, once per page session. */
-export function loadFaceMatchModels(): Promise<void> {
+/** Loads the library and its three models, once per page session. */
+function loadFaceMatchModels(): Promise<FaceApiModule> {
   if (!modelsLoadedPromise) {
-    modelsLoadedPromise = Promise.all([
-      faceapi.nets.tinyFaceDetector.loadFromUri("/models"),
-      faceapi.nets.faceLandmark68Net.loadFromUri("/models"),
-      faceapi.nets.faceRecognitionNet.loadFromUri("/models"),
-    ]).then(() => undefined);
+    modelsLoadedPromise = (async () => {
+      if (!faceApiModulePromise) {
+        faceApiModulePromise = import("@vladmandic/face-api");
+      }
+      const faceapi = await faceApiModulePromise;
+      await Promise.all([
+        faceapi.nets.tinyFaceDetector.loadFromUri("/models"),
+        faceapi.nets.faceLandmark68Net.loadFromUri("/models"),
+        faceapi.nets.faceRecognitionNet.loadFromUri("/models"),
+      ]);
+      return faceapi;
+    })();
   }
   return modelsLoadedPromise;
 }
@@ -36,7 +53,7 @@ export async function compareFaces(
   selfieImg: HTMLImageElement,
   nidImg: HTMLImageElement
 ): Promise<FaceCompareResult> {
-  await loadFaceMatchModels();
+  const faceapi = await loadFaceMatchModels();
 
   const options = new faceapi.TinyFaceDetectorOptions();
   const [selfieResult, nidResult] = await Promise.all([

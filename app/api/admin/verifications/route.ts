@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { requireAdminSession } from "@/lib/verification/requireAdmin";
+import { withErrorHandling } from "@/lib/api/withErrorHandling";
 
 /**
  * GET /api/admin/verifications
@@ -7,7 +8,7 @@ import { requireAdminSession } from "@/lib/verification/requireAdmin";
  * Everything currently awaiting a coordinator's decision, across all
  * three tiers — the data behind /admin/verifications.
  */
-export async function GET() {
+export const GET = withErrorHandling(async () => {
   const auth = await requireAdminSession();
   if (!auth.ok) return auth.response;
 
@@ -39,4 +40,4 @@ export async function GET() {
   ]);
 
   return Response.json({ tier1, tier2, tier3 });
-}
+});

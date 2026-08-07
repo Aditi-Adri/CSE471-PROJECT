@@ -3,9 +3,10 @@ import { prisma } from "@/lib/db";
 import { requireAdminSession } from "@/lib/verification/requireAdmin";
 import { tier1ReviewSchema } from "@/lib/validation/verificationSchemas";
 import { syncWorkerVerificationTier } from "@/lib/verification/applyTierApproval";
+import { withErrorHandling } from "@/lib/api/withErrorHandling";
 
 /** POST /api/admin/verifications/tier1 — approve/reject a Tier 1 submission. */
-export async function POST(request: Request) {
+export const POST = withErrorHandling(async (request: Request) => {
   const auth = await requireAdminSession();
   if (!auth.ok) return auth.response;
 
@@ -40,4 +41,4 @@ export async function POST(request: Request) {
   }
 
   return Response.json({ status: decision });
-}
+});

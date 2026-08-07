@@ -6,6 +6,7 @@ import { checkRateLimit, getClientIp } from "@/lib/auth/rateLimit";
 import { tier2RequestSchema } from "@/lib/validation/verificationSchemas";
 import { canRequestTier2 } from "@/lib/verification/tierGating";
 import { getWorkerTierSnapshot } from "@/lib/verification/getTierSnapshot";
+import { withErrorHandling } from "@/lib/api/withErrorHandling";
 
 /**
  * POST /api/verification/tier2/request
@@ -15,7 +16,7 @@ import { getWorkerTierSnapshot } from "@/lib/verification/getTierSnapshot";
  * coordinator (see app/api/admin/verifications/tier2/route.ts), so
  * there's nothing to auto-decide here.
  */
-export async function POST(request: Request) {
+export const POST = withErrorHandling(async (request: Request) => {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return Response.json({ error: "You must be signed in." }, { status: 401 });
@@ -65,4 +66,4 @@ export async function POST(request: Request) {
   });
 
   return Response.json({ status: "PENDING" });
-}
+});
