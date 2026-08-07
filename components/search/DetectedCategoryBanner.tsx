@@ -1,7 +1,7 @@
 import type { DetectedCategory, SearchApiResponse } from "@/lib/types/search";
 
 const METHOD_LABEL: Record<SearchApiResponse["matchMethod"], string> = {
-  AI: "Gemini AI",
+  AI: "Groq AI",
   KEYWORD: "keyword engine",
   MANUAL_FILTER: "manual filter",
   NONE: "no filter",

@@ -1,5 +1,5 @@
 import { classifyWithKeywords, type CategoryForMatching } from "./keywordEngine";
-import { classifyWithGemini } from "./geminiClient";
+import { classifyWithGroq } from "./groqClient";
 
 export type CategoryMapResult = {
   categoryId: string | null;
@@ -13,7 +13,7 @@ export type CategoryMapResult = {
  * known ServiceCategory.
  *
  * Two-tier strategy:
- *   1. If GEMINI_API_KEY is configured, try the free Gemini API first.
+ *   1. If GROQ_API_KEY is configured, try the free Groq API first.
  *   2. Otherwise — or if that call fails/times out/is inconclusive —
  *      fall back to the local keyword engine, which is free, instant,
  *      and has no external dependency at all.
@@ -26,10 +26,10 @@ export async function mapQueryToCategory(
   query: string,
   categories: readonly CategoryForMatching[]
 ): Promise<CategoryMapResult> {
-  const apiKey = process.env.GEMINI_API_KEY?.trim();
+  const apiKey = process.env.GROQ_API_KEY?.trim();
 
   if (apiKey) {
-    const aiResult = await classifyWithGemini(query, categories, { apiKey });
+    const aiResult = await classifyWithGroq(query, categories, { apiKey });
     if (aiResult) {
       const category = categories.find((c) => c.id === aiResult.categoryId);
       if (category) {
