@@ -273,6 +273,74 @@ model SearchLog {
   @@index([createdAt])
   @@index([detectedCategoryId])
 }
+// =====================================================================
+// LIVE TRACKING & SOS FEATURE MODELS (Jishan)
+// =====================================================================
+
+enum BookingStatus {
+  PENDING
+  IN_TRANSIT
+  ARRIVED
+  COMPLETED
+  CANCELLED
+}
+
+enum SosStatus {
+  PENDING
+  ACCEPTED
+  CANCELLED
+  EXPIRED
+}
+
+/// Stores technician GPS coordinates for live tracking & SOS proximity queries
+model WorkerLocation {
+  workerId       String   @id
+  name           String
+  role           String
+  rating         Float    @default(5.0)
+  avatarInitials String?
+  lat            Float
+  lng            Float
+  isOnline       Boolean  @default(true)
+  isVerified     Boolean  @default(true)
+  isAvailable    Boolean  @default(true)
+  updatedAt      DateTime @updatedAt
+}
+
+/// Tracks customer bookings and en-route technician status
+model Booking {
+  id                 String        @id @default(cuid())
+  customerId         String
+  customerPhone      String?
+  workerId           String?
+  status             BookingStatus @default(PENDING)
+  destinationLat     Float
+  destinationLng     Float
+  etaMinutes         Int?
+  tenMinuteAlertSent Boolean       @default(false)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  @@index([workerId])
+  @@index([customerId])
+}
+
+/// Emergency SOS requests within 3km boundary
+model SosRequest {
+  id               String    @id @default(cuid())
+  customerId       String
+  customerPhone    String?
+  lat              Float
+  lng              Float
+  radiusKm         Float     @default(3.0)
+  alertedWorkerIds String[]
+  status           SosStatus @default(PENDING)
+  acceptedWorkerId String?
+  etaMinutes       Int?
+  acceptedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
 
 /// =====================================================================
 /// MODULE 1 -> FEATURE 1 (Shiva): Multi-Layer Worker Verification &
