@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { UserMenu } from "@/components/auth/UserMenu";
 import { Logo } from "./Logo";
 
 const NAV_LINKS = [
@@ -32,16 +33,19 @@ export function SiteHeader() {
           ))}
         </nav>
 
-        <Link
-          href="/search"
-          className={`inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-medium transition ${
-            pathname === "/search"
-              ? "bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300"
-              : "bg-brand-600 text-white shadow-sm shadow-brand-600/20 hover:bg-brand-700"
-          }`}
-        >
-          Find a technician
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/search"
+            className={`hidden items-center justify-center rounded-full px-4 py-2 text-sm font-medium transition sm:inline-flex ${
+              pathname === "/search"
+                ? "bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300"
+                : "bg-brand-600 text-white shadow-sm shadow-brand-600/20 hover:bg-brand-700"
+            }`}
+          >
+            Find a technician
+          </Link>
+          <UserMenu />
+        </div>
       </div>
     </header>
   );
