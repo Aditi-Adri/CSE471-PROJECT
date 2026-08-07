@@ -1,20 +1,26 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #18181b;
+  /* Primary dark theme background and text */
+  --background: #06060a;
+  --foreground: #f4f4f5;
+
+  /* Live GPS tracking + SOS feature dark variables */
+  --tracking-brand-indigo: #4f46e5;
+  --tracking-pill-bg: #1c1e38;
+  --tracking-ink: #f4f4f5;
+  --tracking-card-bg: #14162b;
+  --tracking-gray-panel: #1c1e38;
+  --tracking-purple-avatar: #7c3aed;
+  --tracking-sos-red: #dc2626;
+  --tracking-green: #22c55e;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
 
-  /* Brand scale — same hues in light and dark mode (a saturated indigo
-     reads fine against both a white and a near-black surface); it's the
-     one consistent accent used for primary actions, links, focus rings
-     and trust/verification highlights across the product. Components
-     that need a lighter "wash" background in dark mode pair this with
-     an explicit `dark:` variant, same convention as the rest of the UI. */
+  /* Brand scale */
   --color-brand-50: #eef2ff;
   --color-brand-100: #e0e7ff;
   --color-brand-200: #c7d2fe;
@@ -31,24 +37,25 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0c;
-    --foreground: #f4f4f5;
-  }
-}
-
 body {
-  background: var(--background);
+  background-color: #06060a;
+  /* Deep purple/indigo radial gradient glow matching your screenshot */
+  background-image: 
+    radial-gradient(circle at 50% 15%, rgba(67, 56, 202, 0.4) 0%, rgba(30, 27, 75, 0.15) 50%, transparent 80%),
+    radial-gradient(circle at 80% 0%, rgba(99, 102, 241, 0.25) 0%, transparent 50%);
+  background-attachment: fixed;
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  min-height: 100vh;
 }
 
 html {
   scroll-behavior: smooth;
+  color-scheme: dark; /* Forces dark styling on default native inputs & dropdowns */
 }
 
 ::selection {
   background: var(--color-brand-200);
   color: var(--color-brand-900);
 }
+
