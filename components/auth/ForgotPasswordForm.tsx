@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { authCardClasses, errorBannerClasses, inputClasses, primaryButtonClasses, successBannerClasses } from "./shared";
+import { firstIssueMessage } from "@/lib/validation/formatZodIssues";
 
 export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
@@ -25,7 +26,7 @@ export function ForgotPasswordForm() {
     setIsSubmitting(false);
 
     if (!response.ok) {
-      setError(data.error ?? "Something went wrong. Please try again.");
+      setError(firstIssueMessage(data.issues, data.error ?? "Something went wrong. Please try again."));
       return;
     }
 

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { readFileAsImage, compressImage } from "@/lib/faceMatch/imageUtils";
 import { errorBannerClasses, inputClasses, primaryButtonClasses, secondaryButtonClasses } from "@/lib/ui/formStyles";
+import { firstIssueMessage } from "@/lib/validation/formatZodIssues";
 import { TierStatusCard } from "./TierStatusCard";
 
 type Reference = { name: string; phone: string; relationship: string };
@@ -88,7 +89,7 @@ export function Tier3Panel({
       });
       const data = await response.json();
       if (!response.ok) {
-        setError(data.error ?? "Something went wrong. Please try again.");
+        setError(firstIssueMessage(data.issues, data.error ?? "Something went wrong. Please try again."));
         return;
       }
       onSubmitted();

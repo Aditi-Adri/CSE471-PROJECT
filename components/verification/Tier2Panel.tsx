@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { errorBannerClasses, inputClasses, primaryButtonClasses } from "@/lib/ui/formStyles";
+import { firstIssueMessage } from "@/lib/validation/formatZodIssues";
 import { TierStatusCard } from "./TierStatusCard";
 
 type Tier2Status = {
@@ -59,7 +60,7 @@ export function Tier2Panel({
     const data = await response.json();
     setSubmitting(false);
     if (!response.ok) {
-      setError(data.error ?? "Something went wrong. Please try again.");
+      setError(firstIssueMessage(data.issues, data.error ?? "Something went wrong. Please try again."));
       return;
     }
     onSubmitted();

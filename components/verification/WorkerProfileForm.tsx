@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DHAKA_AREAS } from "@/lib/constants/dhakaAreas";
 import { cardClasses, errorBannerClasses, inputClasses, primaryButtonClasses } from "@/lib/ui/formStyles";
+import { firstIssueMessage } from "@/lib/validation/formatZodIssues";
 import type { DhakaArea } from "@/app/generated/prisma/client";
 
 type Category = { id: string; name: string; icon: string };
@@ -66,7 +67,7 @@ export function WorkerProfileForm() {
     setIsSubmitting(false);
 
     if (!response.ok) {
-      setError(data.error ?? "Something went wrong. Please try again.");
+      setError(firstIssueMessage(data.issues, data.error ?? "Something went wrong. Please try again."));
       return;
     }
 

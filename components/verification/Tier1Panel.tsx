@@ -4,6 +4,7 @@ import { useState } from "react";
 import { readFileAsImage, compressImage } from "@/lib/faceMatch/imageUtils";
 import { compareFaces, type FaceCompareResult } from "@/lib/faceMatch/compareFaces";
 import { errorBannerClasses, inputClasses, primaryButtonClasses, successBannerClasses } from "@/lib/ui/formStyles";
+import { firstIssueMessage } from "@/lib/validation/formatZodIssues";
 import { TierStatusCard } from "./TierStatusCard";
 
 type Tier1Status = {
@@ -74,7 +75,7 @@ export function Tier1Panel({
       });
       const data = await response.json();
       if (!response.ok) {
-        setSubmitError(data.error ?? "Something went wrong. Please try again.");
+        setSubmitError(firstIssueMessage(data.issues, data.error ?? "Something went wrong. Please try again."));
         return;
       }
       onSubmitted();

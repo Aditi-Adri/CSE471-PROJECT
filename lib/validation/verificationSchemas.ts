@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { requiredPhoneSchema } from "./phone";
 
 // Client compresses images before sending (see lib/faceMatch/imageUtils.ts);
 // this cap is a hard server-side backstop, not the primary size control.
@@ -26,7 +27,7 @@ export type Tier2RequestInput = z.infer<typeof tier2RequestSchema>;
 
 export const referenceSchema = z.object({
   name: z.string().trim().min(2, "Enter the reference's name.").max(100),
-  phone: z.string().trim().regex(/^\+?[0-9]{7,15}$/, "Enter a valid phone number."),
+  phone: requiredPhoneSchema,
   relationship: z.string().trim().min(2, "e.g. \"previous customer\".").max(100),
 });
 
