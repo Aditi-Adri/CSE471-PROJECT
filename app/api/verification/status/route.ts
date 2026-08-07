@@ -1,9 +1,10 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/authOptions";
 import { prisma } from "@/lib/db";
+import { withErrorHandling } from "@/lib/api/withErrorHandling";
 
 /** GET /api/verification/status — the signed-in worker's own tier progress. */
-export async function GET() {
+export const GET = withErrorHandling(async () => {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return Response.json({ error: "You must be signed in." }, { status: 401 });
@@ -48,4 +49,4 @@ export async function GET() {
   });
 
   return Response.json({ worker });
-}
+});

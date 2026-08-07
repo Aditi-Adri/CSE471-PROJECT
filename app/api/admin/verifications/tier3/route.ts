@@ -3,13 +3,14 @@ import { prisma } from "@/lib/db";
 import { requireAdminSession } from "@/lib/verification/requireAdmin";
 import { tier3ReviewSchema } from "@/lib/validation/verificationSchemas";
 import { syncWorkerVerificationTier } from "@/lib/verification/applyTierApproval";
+import { withErrorHandling } from "@/lib/api/withErrorHandling";
 
 /**
  * POST /api/admin/verifications/tier3 — approve/reject a police
  * clearance submission, alongside marking which references were
  * actually contacted and verified.
  */
-export async function POST(request: Request) {
+export const POST = withErrorHandling(async (request: Request) => {
   const auth = await requireAdminSession();
   if (!auth.ok) return auth.response;
 
@@ -56,4 +57,4 @@ export async function POST(request: Request) {
   }
 
   return Response.json({ status: decision });
-}
+});
