@@ -1,7 +1,7 @@
 /**
- * Optional AI classification path using Google Gemini's free tier
- * (https://aistudio.google.com/apikey — no billing required for the
- * free-tier request quota).
+ * Optional AI classification path using Groq's free tier
+ * (https://console.groq.com — no billing required for the free-tier
+ * request quota; runs open models like Llama at very high speed).
  *
  * This is intentionally NOT the primary path — see categoryMapper.ts.
  * It's a straight swap-in for the "OpenAI API" call described in the
@@ -10,27 +10,32 @@
  * an LLM" shape, just pointed at a provider with a genuinely free tier
  * instead of a paid one, per the team's free-APIs-only constraint.
  *
+ * (We originally wired this up against Google's Gemini API — see git
+ * history — but free-tier access was blocked for the account available
+ * to us. Groq's API is OpenAI-compatible, which is why the request
+ * shape below looks like a standard chat-completions call.)
+ *
  * Every call is wrapped in a timeout and never throws — on any failure
  * (missing key, network error, quota, bad response) it resolves to
  * `null` and the caller (categoryMapper.ts) falls back to the keyword
  * engine automatically.
  */
 
-const DEFAULT_MODEL = "gemini-2.0-flash";
+const DEFAULT_MODEL = "llama-3.3-70b-versatile";
 const DEFAULT_TIMEOUT_MS = 5000;
 
-export type GeminiCategoryResult = {
+export type GroqCategoryResult = {
   categoryId: string;
   confidence: number;
 };
 
 type CategoryOption = { id: string; name: string };
 
-export async function classifyWithGemini(
+export async function classifyWithGroq(
   query: string,
   categories: readonly CategoryOption[],
   opts: { apiKey: string; model?: string; timeoutMs?: number }
-): Promise<GeminiCategoryResult | null> {
+): Promise<GroqCategoryResult | null> {
   const { apiKey, model = DEFAULT_MODEL, timeoutMs = DEFAULT_TIMEOUT_MS } = opts;
   if (!apiKey || categories.length === 0) return null;
 
@@ -40,55 +45,39 @@ export async function classifyWithGemini(
   try {
     const categoryList = categories.map((c) => `- ${c.name} (id: ${c.id})`).join("\n");
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        signal: controller.signal,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          systemInstruction: {
-            parts: [
-              {
-                text:
-                  "You classify a Dhaka home-services customer's free-text problem " +
-                  "description into exactly one service category from a fixed list. " +
-                  "Reply with strict JSON only, matching the response schema. " +
-                  "If nothing plausibly matches, set categoryId to an empty string.",
-              },
-            ],
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content:
+              "You classify a Dhaka home-services customer's free-text problem " +
+              "description into exactly one service category from a fixed list. " +
+              "Reply with strict JSON only: {\"categoryId\": string, \"confidence\": number} " +
+              "matching one of the given category ids. If nothing plausibly matches, " +
+              "set categoryId to an empty string.",
           },
-          contents: [
-            {
-              role: "user",
-              parts: [
-                {
-                  text:
-                    `Customer's message: "${query}"\n\nAvailable categories:\n${categoryList}`,
-                },
-              ],
-            },
-          ],
-          generationConfig: {
-            temperature: 0,
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: "object",
-              properties: {
-                categoryId: { type: "string" },
-                confidence: { type: "number" },
-              },
-              required: ["categoryId", "confidence"],
-            },
+          {
+            role: "user",
+            content: `Customer's message: "${query}"\n\nAvailable categories:\n${categoryList}`,
           },
-        }),
-      }
-    );
+        ],
+      }),
+    });
 
     if (!response.ok) return null;
 
     const payload = await response.json();
-    const text: string | undefined = payload?.candidates?.[0]?.content?.parts?.[0]?.text;
+    const text: string | undefined = payload?.choices?.[0]?.message?.content;
     if (!text) return null;
 
     const parsed = JSON.parse(text) as { categoryId?: string; confidence?: number };

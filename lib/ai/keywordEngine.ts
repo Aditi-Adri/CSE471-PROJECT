@@ -4,8 +4,8 @@
  * This is the PRIMARY classification path for Smart Search (see
  * categoryMapper.ts) — it costs nothing, needs no network call, and
  * never fails, so a demo/viva never depends on a third-party API being
- * reachable. The optional AI path in geminiClient.ts only kicks in when
- * a free Gemini API key is explicitly configured.
+ * reachable. The optional AI path in groqClient.ts only kicks in when
+ * a free Groq API key is explicitly configured.
  *
  * Algorithm: normalize the query, then score each category by how many
  * of its keyword phrases appear in the text. Multi-word phrases (e.g.
