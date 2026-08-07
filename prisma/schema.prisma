@@ -106,6 +106,12 @@ model User {
   sessions            Session[]
   passwordResetTokens PasswordResetToken[]
 
+  /// Coordinator (Admin) actions on other workers' verification
+  /// submissions — see the Worker Verification models below.
+  tier1Reviews     Tier1Verification[]     @relation("Tier1Reviewer")
+  tier2Evaluations Tier2SkillTest[]        @relation("Tier2Evaluator")
+  tier3Reviews     Tier3PoliceClearance[]  @relation("Tier3Reviewer")
+
   @@index([role])
 }
 
@@ -213,6 +219,10 @@ model Worker {
   categories   WorkerCategory[]
   availability AvailabilitySlot[]
 
+  tier1Verification    Tier1Verification?
+  tier2SkillTest       Tier2SkillTest?
+  tier3PoliceClearance Tier3PoliceClearance?
+
   @@index([area])
   @@index([verificationTier])
   @@index([isAvailableNow])
@@ -264,7 +274,7 @@ model SearchLog {
   @@index([detectedCategoryId])
 }
 // =====================================================================
-// LIVE TRACKING & SOS FEATURE MODELS
+// LIVE TRACKING & SOS FEATURE MODELS (Jishan)
 // =====================================================================
 
 enum BookingStatus {
@@ -301,7 +311,7 @@ model WorkerLocation {
 model Booking {
   id                 String        @id @default(cuid())
   customerId         String
-  customerPhone      String?       // Add this line
+  customerPhone      String?
   workerId           String?
   status             BookingStatus @default(PENDING)
   destinationLat     Float
@@ -332,11 +342,99 @@ model SosRequest {
   updatedAt        DateTime  @updatedAt
 }
 
-// Preserve team table to prevent data drop
+/// =====================================================================
+/// MODULE 1 -> FEATURE 1 (Shiva): Multi-Layer Worker Verification &
+/// Digital Badge System.
+///
+/// One row per worker per tier (not a history log) — a tier is either
+/// not started (no row), awaiting a decision (PENDING), or decided
+/// (APPROVED/REJECTED, re-submittable after rejection by overwriting
+/// the same row). Approving a tier bumps Worker.verificationTier,
+/// which is what the existing search feature already ranks and filters
+/// on (see lib/search/buildWorkerQuery.ts) — this feature never
+/// duplicates that ranking logic, only feeds it.
+/// =====================================================================
+enum TierReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// Tier 1 — NID vs. selfie face match. `matchDistance` is a face
+/// descriptor distance from the client-side comparison (lower = more
+/// similar; ~<0.5 is a confident same-person match). A confident match
+/// auto-approves; anything less falls back to a coordinator's manual
+/// decision — the "automatic check" is a fast path, not the only path.
 model Tier1Verification {
-  id        String    @id @default(cuid())
-  workerId  String    @unique
-  status    String?
-  createdAt DateTime? @default(now())
-  updatedAt DateTime? @updatedAt
+  id            String           @id @default(cuid())
+  workerId      String           @unique
+  worker        Worker           @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  nidImage      String           @db.Text
+  selfieImage   String           @db.Text
+  matchDistance Float?
+  autoApproved  Boolean          @default(false)
+  status        TierReviewStatus @default(PENDING)
+  reviewedById  String?
+  reviewedBy    User?            @relation("Tier1Reviewer", fields: [reviewedById], references: [id])
+  reviewNote    String?
+  submittedAt   DateTime         @default(now())
+  reviewedAt    DateTime?
+
+  @@index([status])
+}
+
+/// Tier 2 — physical skills test. Inherently a human, in-person
+/// evaluation (the spec is explicit it's judged "directly by platform
+/// coordinators") — the system only tracks the request/scheduling and
+/// records the coordinator's pass/fail decision, no automation.
+model Tier2SkillTest {
+  id                String           @id @default(cuid())
+  workerId          String           @unique
+  worker            Worker           @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  preferredSchedule String?
+  status            TierReviewStatus @default(PENDING)
+  evaluatedById     String?
+  evaluatedBy       User?            @relation("Tier2Evaluator", fields: [evaluatedById], references: [id])
+  evaluatorNote     String?
+  requestedAt       DateTime         @default(now())
+  evaluatedAt       DateTime?
+
+  @@index([status])
+}
+
+/// Tier 3 — police clearance document + reference checks. Also a
+/// human review process; coordinators mark each reference as
+/// contacted/verified alongside the document before deciding.
+model Tier3PoliceClearance {
+  id                String           @id @default(cuid())
+  workerId          String           @unique
+  worker            Worker           @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  clearanceDocument String           @db.Text
+  status            TierReviewStatus @default(PENDING)
+  reviewedById      String?
+  reviewedBy        User?            @relation("Tier3Reviewer", fields: [reviewedById], references: [id])
+  reviewNote        String?
+  submittedAt       DateTime         @default(now())
+  reviewedAt        DateTime?
+
+  references WorkerReference[]
+
+  @@index([status])
+}
+
+/// A previous-customer reference submitted alongside Tier 3. Contacting
+/// referees is a manual coordinator task the system tracks, not
+/// automates — there's no legitimate way to auto-verify a phone call.
+model WorkerReference {
+  id           String               @id @default(cuid())
+  tier3Id      String
+  tier3        Tier3PoliceClearance @relation(fields: [tier3Id], references: [id], onDelete: Cascade)
+  name         String
+  phone        String
+  relationship String
+  contacted    Boolean              @default(false)
+  verified     Boolean              @default(false)
+  note         String?
+
+  @@index([tier3Id])
 }

@@ -6,6 +6,7 @@ import { useState } from "react";
 import { RoleSelect } from "./RoleSelect";
 import { authCardClasses, errorBannerClasses, inputClasses, primaryButtonClasses } from "./shared";
 import { type PublicRole } from "@/lib/validation/authSchemas";
+import { firstIssueMessage } from "@/lib/validation/formatZodIssues";
 
 export function CompleteProfileForm() {
   const router = useRouter();
@@ -30,7 +31,7 @@ export function CompleteProfileForm() {
     setIsSubmitting(false);
 
     if (!response.ok) {
-      setError(data.error ?? "Something went wrong. Please try again.");
+      setError(firstIssueMessage(data.issues, data.error ?? "Something went wrong. Please try again."));
       return;
     }
 

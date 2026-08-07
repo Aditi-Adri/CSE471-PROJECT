@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { authCardClasses, errorBannerClasses, inputClasses, primaryButtonClasses, successBannerClasses } from "./shared";
+import { firstIssueMessage } from "@/lib/validation/formatZodIssues";
 
 export function ResetPasswordForm() {
   const router = useRouter();
@@ -35,7 +36,7 @@ export function ResetPasswordForm() {
     setIsSubmitting(false);
 
     if (!response.ok) {
-      setError(data.error ?? "Something went wrong. Please try again.");
+      setError(firstIssueMessage(data.issues, data.error ?? "Something went wrong. Please try again."));
       return;
     }
 
