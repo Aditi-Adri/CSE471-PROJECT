@@ -110,7 +110,13 @@ export function FilterPanel({
           className={selectClass}
         >
           <option value="">Any tier</option>
-          {VERIFICATION_TIERS.map((t) => (
+          {/* "Unverified" is rank 0 — as a *minimum* tier it would match
+              every worker (everyone is at least unverified), which is
+              functionally identical to "Any tier" but looks broken:
+              picking it and seeing Tier 3 workers appear reads as a bug.
+              Excluding it here removes that trap; the real "Any tier"
+              option above already covers the same case correctly. */}
+          {VERIFICATION_TIERS.filter((t) => t.value !== "UNVERIFIED").map((t) => (
             <option key={t.value} value={t.value}>
               {t.label}
             </option>
