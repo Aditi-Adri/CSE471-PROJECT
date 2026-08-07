@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { relativeKm } from "@/lib/geo";
 
+// Force Next.js to dynamically fetch fresh data on every request
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 /**
  * GET /api/tracking/sos/[sosId]
- *
- * Returns the SOS request's current state, shaped to match the
- * "sos:accepted" socket payload emitted by the accept route.
  */
 export async function GET(
   request: NextRequest,
@@ -20,7 +21,7 @@ export async function GET(
       return NextResponse.json({ error: "SOS request not found" }, { status: 404 });
     }
 
-    // Workers who were alerted, plotted on the radar relative to the customer.
+    // Only fetch worker locations that actually exist in the DB
     const alertedWorkers = sos.alertedWorkerIds?.length
       ? await prisma.workerLocation.findMany({
           where: { workerId: { in: sos.alertedWorkerIds } },
@@ -36,7 +37,7 @@ export async function GET(
       accepted = {
         sosId: sos.id,
         workerId: sos.acceptedWorkerId,
-        etaMinutes: sos.etaMinutes, // Updated field name here
+        etaMinutes: sos.etaMinutes,
         worker: worker
           ? {
               name: worker.name,
@@ -54,7 +55,8 @@ export async function GET(
       status: sos.status,
       radiusKm: sos.radiusKm,
       customerLocation: { lat: sos.lat, lng: sos.lng },
-      alertedWorkerCount: sos.alertedWorkerIds?.length || 0,
+      // 🟢 Count matches the exact number of active workers found
+      alertedWorkerCount: alertedWorkers.length,
       nearbyWorkers: alertedWorkers.map((w) => ({
         workerId: w.workerId,
         name: w.name,

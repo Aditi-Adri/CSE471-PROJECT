@@ -19,12 +19,27 @@ export default function SosRadar({
   const cy = 150;
   const maxR = 90; // px representing radiusKm on screen
 
-  const scale = maxR / radiusKm;
+  const scale = maxR / Math.max(radiusKm, 1);
 
-  const plotted = workers.map((w) => {
-    const px = cx + clamp(w.dx * scale, -maxR - 10, maxR + 10);
-    const py = cy + clamp(w.dy * scale, -maxR - 10, maxR + 10);
-    return { ...w, px, py };
+  const plotted = workers.map((w, index) => {
+    // 🟢 Guard against undefined dx/dy by defaulting to a small angle offset
+    const angle = (index * (2 * Math.PI)) / Math.max(workers.length, 1);
+    const fallbackDx = Math.cos(angle) * (radiusKm * 0.4);
+    const fallbackDy = Math.sin(angle) * (radiusKm * 0.4);
+
+    const rawDx = typeof w.dx === "number" && !isNaN(w.dx) ? w.dx : fallbackDx;
+    const rawDy = typeof w.dy === "number" && !isNaN(w.dy) ? w.dy : fallbackDy;
+
+    const px = cx + clamp(rawDx * scale, -maxR + 10, maxR - 10);
+    const py = cy + clamp(rawDy * scale, -maxR + 10, maxR - 10);
+
+    return {
+      ...w,
+      // 🟢 Force a unique key for React using index fallback
+      uniqueKey: w.workerId ? `${w.workerId}-${index}` : `worker-${index}`,
+      px,
+      py,
+    };
   });
 
   return (
@@ -86,7 +101,7 @@ export default function SosRadar({
         {/* worker markers */}
         {plotted.map((w) => (
           <circle
-            key={w.workerId}
+            key={w.uniqueKey}
             cx={w.px}
             cy={w.py}
             r={6}

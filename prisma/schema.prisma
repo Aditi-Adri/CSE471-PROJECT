@@ -285,16 +285,19 @@ enum SosStatus {
 /// Stores technician GPS coordinates for live tracking & SOS proximity queries
 model WorkerLocation {
   workerId       String   @id
-  name           String
-  role           String
+  name           String   @default("Service Tech")
+  role           String   @default("Technician")
   rating         Float    @default(5.0)
   avatarInitials String?
-  lat            Float
-  lng            Float
-  isOnline       Boolean  @default(true)
-  isVerified     Boolean  @default(true)
+  lat            Float?
+  lng            Float?
+  isOnline       Boolean  @default(false)
+  isVerified     Boolean  @default(false)
   isAvailable    Boolean  @default(true)
-  updatedAt      DateTime @updatedAt
+  updatedAt      DateTime @updatedAt @default(now())
+
+  // Composite index for fast geolocation filtering
+  @@index([isOnline, isVerified, isAvailable])
 }
 
 /// Tracks customer bookings and en-route technician status

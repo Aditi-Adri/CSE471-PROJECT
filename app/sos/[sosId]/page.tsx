@@ -54,7 +54,16 @@ export default function SosPage() {
 
   const isAccepted = !!accepted;
   const radiusKm = sos?.radiusKm ?? 3;
-  const alertedCount = sos?.alertedWorkerCount ?? 0;
+
+  // 🟢 ALWAYS keep dots and text count strictly equal
+  const nearbyWorkers = sos?.nearbyWorkers ?? [];
+  
+  // If nearbyWorkers is populated, count its length (e.g. 2).
+  // Otherwise, fallback to alertedWorkerCount only if data hasn't loaded yet.
+  const alertedCount = sos
+    ? nearbyWorkers.length 
+    : 0;
+  console.log("WORKER COUNT CHECK:", sos?.nearbyWorkers ? sos.nearbyWorkers.length : 0);
 
   return (
     <div style={{ minHeight: "100vh", paddingTop: "0px" }}>
@@ -158,7 +167,7 @@ export default function SosPage() {
               {radiusKm}km radius
             </div>
 
-            <SosRadar radiusKm={radiusKm} workers={sos?.nearbyWorkers || []} />
+            <SosRadar radiusKm={radiusKm} workers={nearbyWorkers} />
           </div>
 
           {/* Bottom Alert Status Panel */}
