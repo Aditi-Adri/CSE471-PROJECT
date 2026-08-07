@@ -21,7 +21,7 @@ function parseIntParam(value: string | null): number | undefined {
  *   2. Resolve a ServiceCategory either from an explicit `categoryId`
  *      filter, or by mapping the free-text `q` through
  *      lib/ai/categoryMapper.ts (free keyword engine, with an optional
- *      free-tier Gemini call if GEMINI_API_KEY is set).
+ *      free-tier Groq call if GROQ_API_KEY is set).
  *   3. Build a filtered, sorted Prisma query from the remaining filters
  *      (area, budget range, verification tier, availability).
  *   4. Log the search (query text, matched category, method, timing) to

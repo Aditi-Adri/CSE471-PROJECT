@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { optionalPhoneSchema } from "./phone";
 
 /**
  * Roles selectable at public sign-up. ADMIN is intentionally excluded
@@ -19,18 +20,11 @@ const passwordSchema = z
   .regex(/[a-zA-Z]/, "Password must include at least one letter.")
   .regex(/[0-9]/, "Password must include at least one number.");
 
-const phoneSchema = z
-  .string()
-  .trim()
-  .regex(/^\+?[0-9]{7,15}$/, "Enter a valid phone number.")
-  .optional()
-  .or(z.literal(""));
-
 export const registerSchema = z
   .object({
     name: z.string().trim().min(2, "Enter your full name.").max(100),
     email: z.string().trim().toLowerCase().email("Enter a valid email address."),
-    phone: phoneSchema,
+    phone: optionalPhoneSchema,
     password: passwordSchema,
     confirmPassword: z.string(),
     role: z.enum(PUBLIC_ROLES),
@@ -59,7 +53,7 @@ export const resetPasswordSchema = z
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 
 export const completeProfileSchema = z.object({
-  phone: phoneSchema,
+  phone: optionalPhoneSchema,
   role: z.enum(PUBLIC_ROLES),
 });
 export type CompleteProfileInput = z.infer<typeof completeProfileSchema>;
