@@ -119,6 +119,21 @@ export default async function WorkerProfilePage({
           </div>
         )}
 
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Ready to book?</p>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              Tap the button to continue to the booking page.
+            </p>
+          </div>
+          <Link
+            href={`/workers/${worker.id}/booking`}
+            className="inline-flex items-center justify-center rounded-lg bg-brand-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-700"
+          >
+            Booked
+          </Link>
+        </div>
+
         <p className="rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-500 dark:bg-zinc-950 dark:text-zinc-500">
           Direct booking, in-app chat and secure payment are launching soon — for now, use this
           profile to compare verified technicians before reaching out.
