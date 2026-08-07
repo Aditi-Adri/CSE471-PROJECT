@@ -7,6 +7,7 @@ import { distanceKm } from "./lib/geo";
 import { estimateEtaMinutesFallback } from "./lib/eta";
 import { sendSms } from "./lib/twilio";
 import { setIO } from "./lib/socketServer";
+import type { BookingStatus } from "./app/generated/prisma/client";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT || "3000", 10);
@@ -49,7 +50,7 @@ app.prepare().then(() => {
 
           const data: {
             etaMinutes: number;
-            status?: any;
+            status?: BookingStatus;
             tenMinuteAlertSent?: boolean;
           } = { etaMinutes };
           let shouldSendTenMinAlert = false;
@@ -73,7 +74,9 @@ app.prepare().then(() => {
             sendSms(
               booking.customerPhone,
               `HireLocal: your technician is about ${etaMinutes} min away.`
-            ).catch((err: any) => console.error("SMS failed:", err.message));
+            ).catch((err: unknown) =>
+              console.error("SMS failed:", err instanceof Error ? err.message : err)
+            );
           }
 
           io.to(`tracking:${bookingId}`).emit("location:update", {
@@ -82,8 +85,8 @@ app.prepare().then(() => {
             lng,
             etaMinutes,
           });
-        } catch (err: any) {
-          console.error("location:update handler failed:", err.message);
+        } catch (err: unknown) {
+          console.error("location:update handler failed:", err instanceof Error ? err.message : err);
         }
       }
     );

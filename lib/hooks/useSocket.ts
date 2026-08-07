@@ -17,7 +17,11 @@ export function useSocket(): Socket | null {
       autoConnect: true,
     });
 
-    setSocket(socketInstance);
+    // Set state from the "connect" callback, not synchronously here —
+    // consumers gate their own effects on `socket` being non-null, so
+    // this also means they only see it once the handshake actually
+    // completes, not before.
+    socketInstance.on("connect", () => setSocket(socketInstance));
 
     return () => {
       socketInstance.disconnect();
