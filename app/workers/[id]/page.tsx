@@ -74,11 +74,10 @@ export default async function WorkerProfilePage({
           {worker.categories.map(({ category, isPrimary }) => (
             <span
               key={category.id}
-              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
-                isPrimary
-                  ? "bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300"
-                  : "border border-zinc-200 text-zinc-500 dark:border-zinc-700 dark:text-zinc-400"
-              }`}
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${isPrimary
+                ? "bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300"
+                : "border border-zinc-200 text-zinc-500 dark:border-zinc-700 dark:text-zinc-400"
+                }`}
             >
               <span aria-hidden="true">{category.icon}</span>
               {category.name}
@@ -118,6 +117,21 @@ export default async function WorkerProfilePage({
             </div>
           </div>
         )}
+
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Ready to book?</p>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              Tap the button to continue to the booking page.
+            </p>
+          </div>
+          <Link
+            href={`/workers/${worker.id}/booking`}
+            className="inline-flex items-center justify-center rounded-lg bg-brand-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-700"
+          >
+            Book Now
+          </Link>
+        </div>
 
         <p className="rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-500 dark:bg-zinc-950 dark:text-zinc-500">
           Direct booking, in-app chat and secure payment are launching soon — for now, use this

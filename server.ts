@@ -66,7 +66,7 @@ app.prepare().then(() => {
 
           if (booking.workerId) {
             await prisma.workerLocation
-              .update({ where: { workerId: booking.workerId }, data: { lat, lng } })
+              .updateMany({ where: { workerId: booking.workerId }, data: { lat, lng } })
               .catch(() => {});
           }
 

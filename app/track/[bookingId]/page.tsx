@@ -6,6 +6,7 @@ import AppHeader from "@/components/tracking/AppHeader";
 import LiveTrackingMap from "@/components/tracking/LiveTrackingMap";
 import WorkerLocationSender from "@/components/tracking/WorkerLocationSender";
 import SOSButton from "@/components/tracking/SOSButton";
+import { BookingConfirm } from "@/components/booking/BookingConfirm";
 import type { TrackingApiResponse } from "@/lib/types/tracking";
 
 export default function TrackBookingPage() {
@@ -28,9 +29,21 @@ export default function TrackBookingPage() {
 
   const destination = booking.destination || { lat: 23.7808, lng: 90.4194 };
   const worker = booking.worker;
-  const initialWorkerLocation = worker ? { lat: worker.lat, lng: worker.lng } : null; // Get DB location
+  const initialWorkerLocation = worker ? { lat: worker.lat, lng: worker.lng } : null;
   const eta = etaMinutes ?? booking.etaMinutes;
   const smsSent = booking.tenMinuteAlertSent;
+
+  // Build a BookingConfirm-compatible worker object from tracking data
+  const bookingConfirmWorker = worker
+    ? {
+      id: worker.id,
+      user: { name: worker.name },
+      addressDetail: "",
+      hourlyRateMinBdt: 1200,
+      hourlyRateMaxBdt: 1200,
+      categories: [{ category: { name: worker.role || "Technician" }, isPrimary: true }],
+    }
+    : null;
 
   return (
     <div style={{ minHeight: "100vh" }}>
@@ -101,8 +114,8 @@ export default function TrackBookingPage() {
               {eta === 0
                 ? "📍 Worker has arrived at your location!"
                 : eta != null
-                ? `Worker arriving in ${eta} minutes.`
-                : "Waiting for live location..."}
+                  ? `Worker arriving in ${eta} minutes.`
+                  : "Waiting for live location..."}
             </div>
 
             <div style={{ marginTop: 16 }}>
@@ -114,6 +127,13 @@ export default function TrackBookingPage() {
             </div>
           </div>
         </div>
+
+        {/* ── Booking Confirmation: OTP, Extra Charges & Billing ────── */}
+        {bookingConfirmWorker && (
+          <div style={{ marginTop: 20 }}>
+            <BookingConfirm worker={bookingConfirmWorker} />
+          </div>
+        )}
       </main>
     </div>
   );
