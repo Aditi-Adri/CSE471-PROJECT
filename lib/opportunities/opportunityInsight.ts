@@ -1,5 +1,6 @@
 import { summarizeOpportunitiesWithGroq } from "@/lib/ai/groqClient";
 import type { OpportunityArea } from "./demandScore";
+import type { DhakaWeather } from "@/lib/weather/openMeteo";
 
 /**
  * Turns the top few areas from getOpportunityAreas() into one short,
@@ -9,15 +10,23 @@ import type { OpportunityArea } from "./demandScore";
  * numbers on any failure (missing key, timeout, quota, bad response).
  * Either path is always a real sentence grounded in real numbers —
  * never a generic placeholder.
+ *
+ * `weather`, if given, is handed to Groq as a plain fact to mention if
+ * relevant ("it's currently raining") — the prompt explicitly does not
+ * ask it to assert a demand-weather correlation, because we don't have
+ * real data to back one. See lib/weather/openMeteo.ts.
  */
-export async function getOpportunityInsight(topAreas: OpportunityArea[]): Promise<string> {
+export async function getOpportunityInsight(
+  topAreas: OpportunityArea[],
+  weather?: DhakaWeather | null
+): Promise<string> {
   const fallback = deterministicInsight(topAreas);
   if (topAreas.length === 0 || topAreas[0].score <= 0) return fallback;
 
   const apiKey = process.env.GROQ_API_KEY?.trim();
   if (!apiKey) return fallback;
 
-  const prompt = topAreas
+  const areaLines = topAreas
     .slice(0, 5)
     .map(
       (a) =>
@@ -26,6 +35,13 @@ export async function getOpportunityInsight(topAreas: OpportunityArea[]): Promis
         `${a.availableWorkers} available workers nearby)`
     )
     .join("\n");
+
+  const weatherLine = weather
+    ? `\nCurrent Dhaka weather (mention only if genuinely relevant, don't invent a cause-effect claim): ` +
+      `${weather.condition}, ${weather.temperatureC}°C, ${weather.precipitationMm}mm precipitation.`
+    : "";
+
+  const prompt = areaLines + weatherLine;
 
   const aiResult = await summarizeOpportunitiesWithGroq(prompt, { apiKey });
   return aiResult ?? fallback;
