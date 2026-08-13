@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { SearchBar } from "./SearchBar";
 import { FilterPanel } from "./FilterPanel";
 import { WorkerCard } from "./WorkerCard";
+import { WorkerMapView } from "./WorkerMapView";
 import { ResultsSkeleton } from "./ResultsSkeleton";
 import { EmptyState, ErrorState } from "./EmptyState";
 import { DetectedCategoryBanner } from "./DetectedCategoryBanner";
@@ -31,6 +32,7 @@ export function SearchExperience() {
   const [sort, setSort] = useState<SortOption>("RELEVANCE");
   const [page, setPage] = useState(1);
   const [retryNonce, setRetryNonce] = useState(0);
+  const [viewMode, setViewMode] = useState<"list" | "map">("list");
 
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [response, setResponse] = useState<SearchApiResponse | null>(null);
@@ -155,11 +157,31 @@ export function SearchExperience() {
                   {response.total} {response.total === 1 ? "technician" : "technicians"} found
                   {response.matchMethod === "NONE" && " · sorted by trust & rating"}
                 </span>
-                <span>Search took {response.durationMs}ms</span>
+                <div className="flex items-center gap-3">
+                  <span className="hidden sm:inline">Search took {response.durationMs}ms</span>
+                  <div className="flex rounded-full border border-zinc-200 p-0.5 dark:border-zinc-800">
+                    {(["list", "map"] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setViewMode(mode)}
+                        className={`rounded-full px-3 py-1 text-xs font-medium capitalize transition ${
+                          viewMode === mode
+                            ? "bg-brand-600 text-white"
+                            : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+                        }`}
+                      >
+                        {mode}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               {response.results.length === 0 ? (
                 <EmptyState message="No technicians match those filters yet. Try widening your budget or removing a filter." />
+              ) : viewMode === "map" ? (
+                <WorkerMapView workers={response.results} />
               ) : (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                   {response.results.map((worker) => (

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { mapQueryToCategory } from "@/lib/ai/categoryMapper";
 import { buildWorkerOrderBy, buildWorkerWhere } from "@/lib/search/buildWorkerQuery";
 import { searchRequestSchema } from "@/lib/validation/searchSchema";
+import { checkRateLimit, getClientIp } from "@/lib/auth/rateLimit";
 import type { DhakaArea, VerificationTier } from "@/app/generated/prisma/client";
 
 function parseIntParam(value: string | null): number | undefined {
@@ -29,6 +30,18 @@ function parseIntParam(value: string | null): number | undefined {
  */
 export async function GET(request: Request) {
   const startedAt = Date.now();
+
+  // Deliberately no sign-in requirement — browsing search results is
+  // meant to work for anonymous visitors — but every other public
+  // endpoint in the app rate-limits by IP and this one didn't, which
+  // left it as the one place a script could hammer the DB (and the
+  // optional Groq call in mapQueryToCategory) for free.
+  const ip = getClientIp(request);
+  const rateLimit = checkRateLimit(`search:${ip}`, 60, 60 * 1000);
+  if (!rateLimit.allowed) {
+    return Response.json({ error: "Too many search requests. Please slow down." }, { status: 429 });
+  }
+
   const { searchParams } = new URL(request.url);
 
   const parsed = searchRequestSchema.safeParse({
