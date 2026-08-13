@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   ClipboardCheckIcon,
   IdCardIcon,
+  MessageIcon,
   ShieldCheckIcon,
   WrenchIcon,
 } from "@/components/marketing/icons";
@@ -32,6 +33,12 @@ function getQuickLinks(role: Role, hasWorkerProfile: boolean): QuickLink[] {
           title: "Find a technician",
           description: "Search verified local workers by service, area, or budget.",
           icon: SearchIcon,
+        },
+        {
+          href: "/dashboard/my-requests",
+          title: "My requests",
+          description: "Jobs you posted that didn't match a regular category — see if one's been claimed.",
+          icon: MessageIcon,
         },
       ];
 
