@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { DHAKA_AREA_COORDS } from "@/lib/constants/dhakaAreaCoords";
 import { AREA_LABEL_BY_VALUE } from "@/lib/constants/dhakaAreas";
-import { bucketByNearestArea, computeShortageScore, RECENT_DAYS } from "./demandScoreMath";
+import { bucketByNearestArea, computeShortageScore, filterPlausibleLocations, RECENT_DAYS } from "./demandScoreMath";
 import type { DhakaArea } from "@/app/generated/prisma/client";
 
 /**
@@ -74,9 +74,11 @@ export async function getOpportunityAreas(): Promise<OpportunityArea[]> {
     ]);
 
   const bookingsByArea = bucketByNearestArea(
-    recentBookings.map((b) => ({ lat: b.destinationLat, lng: b.destinationLng }))
+    filterPlausibleLocations(recentBookings.map((b) => ({ lat: b.destinationLat, lng: b.destinationLng })))
   );
-  const sosByArea = bucketByNearestArea(recentSosRequests.map((s) => ({ lat: s.lat, lng: s.lng })));
+  const sosByArea = bucketByNearestArea(
+    filterPlausibleLocations(recentSosRequests.map((s) => ({ lat: s.lat, lng: s.lng })))
+  );
 
   const jobRequestsByArea = new Map(openJobRequests.map((r) => [r.area, r._count._all]));
   const workersByArea = new Map(availableWorkers.map((r) => [r.area, r._count._all]));

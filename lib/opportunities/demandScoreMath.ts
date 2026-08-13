@@ -49,6 +49,28 @@ export function bucketByNearestArea(points: { lat: number; lng: number }[]): Map
 }
 
 /**
+ * Drops points that share an exact (lat, lng) beyond a small
+ * threshold. Real GPS fixes from distinct real addresses essentially
+ * never coincide to 5 decimal places (~1m) at any volume — a large
+ * exact-duplicate cluster is a hardcoded fallback/test coordinate
+ * (e.g. a dev browser's default location when Geolocation permission
+ * was never granted during testing), not real demand. Found via a
+ * live check against the shared dev DB: one point repeated 45+ times
+ * in Booking and 25+ times in SosRequest. Filtering by "suspiciously
+ * exact duplicate" rather than hardcoding that one coordinate keeps
+ * this general enough to catch any future artifact of the same shape.
+ */
+export function filterPlausibleLocations<T extends { lat: number; lng: number }>(
+  points: T[],
+  maxExactDuplicates = 3
+): T[] {
+  const key = (p: T) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`;
+  const counts = new Map<string, number>();
+  for (const p of points) counts.set(key(p), (counts.get(key(p)) ?? 0) + 1);
+  return points.filter((p) => (counts.get(key(p)) ?? 0) <= maxExactDuplicates);
+}
+
+/**
  * Score = weighted demand ÷ (available workers + 1). Dividing by
  * supply (not just ranking raw demand) is the whole point — an area
  * with 10 requests and 20 workers isn't "hot," one with 3 requests and
