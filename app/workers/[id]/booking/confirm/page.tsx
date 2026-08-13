@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth/authOptions";
 import { prisma } from "@/lib/db";
 import { BookingConfirm } from "@/components/booking/BookingConfirm";
 
@@ -31,6 +33,13 @@ export default async function BookingConfirmPage({ params }: { params: Promise<{
     );
   }
 
+  // Optional — this preview still works for a signed-out visitor, it
+  // just has no saved address to reveal once "arrival" is verified.
+  const session = await getServerSession(authOptions);
+  const customer = session?.user?.id
+    ? await prisma.user.findUnique({ where: { id: session.user.id }, select: { address: true } })
+    : null;
+
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-10 sm:px-6 lg:px-8">
       <div className="flex items-center justify-between gap-4">
@@ -44,7 +53,6 @@ export default async function BookingConfirmPage({ params }: { params: Promise<{
         worker={{
           id: worker.id,
           user: { name: worker.user.name },
-          addressDetail: worker.addressDetail,
           hourlyRateMinBdt: worker.hourlyRateMinBdt,
           hourlyRateMaxBdt: worker.hourlyRateMaxBdt,
           categories: worker.categories.map(({ category, isPrimary }) => ({
@@ -52,6 +60,7 @@ export default async function BookingConfirmPage({ params }: { params: Promise<{
             isPrimary,
           })),
         }}
+        customerAddress={customer?.address ?? ""}
       />
     </div>
   );
