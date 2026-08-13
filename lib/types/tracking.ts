@@ -2,78 +2,17 @@ import type { LatLng } from "@/lib/geo";
 
 export type { LatLng };
 
-export type TrackingWorkerSummary = {
-  id: string;
-  name: string;
-  role: string;
-  rating: number;
-  avatarInitials: string | null;
-  lat: number;
-  lng: number;
-};
-
-export type NearbyWorker = {
-  workerId: string;
-  name: string;
-  dx: number;
-  dy: number;
-};
-
-export type AcceptedSosWorker = {
-  sosId: string;
-  workerId: string;
-  etaMinutes: number | null;
-  worker: {
-    name: string;
-    role: string;
-    rating: number;
-    avatarInitials: string;
-  } | null;
-  workerLocation: LatLng | null;
-};
-
-export type SosApiResponse = {
-  sosId: string;
-  status: "PENDING" | "ACCEPTED";
-  radiusKm: number;
-  customerLocation: LatLng;
-  alertedWorkerCount: number;
-  nearbyWorkers: NearbyWorker[];
-  accepted: AcceptedSosWorker | null;
-  createdAt: string;
-};
-
-export type TrackingApiResponse = {
-  id: string;
-  status: "PENDING" | "IN_TRANSIT" | "ARRIVED";
-  etaMinutes: number | null;
-  tenMinuteAlertSent: boolean;
-  destination: LatLng;
-  worker: {
-    id: string;
-    name: string;
-    role: string;
-    rating: number;
-    avatarInitials: string | null;
-    lat: number;
-    lng: number;
-  } | null;
-  customerId?: string;
-  customerPhone?: string;
-};
-
-export type SosNewAlert = {
-  sosId: string;
-  lat: number;
-  lng: number;
-  createdAt: string;
-};
-
-export type SosAcceptedPayload = AcceptedSosWorker;
-
+/** Broadcast over the `tracking:{bookingId}` room — see server.ts. */
 export type LocationUpdatePayload = {
   bookingId: string;
   lat: number;
   lng: number;
   etaMinutes: number | null;
+};
+
+/** A worker's rough offset from the customer, for the SOS radar widget — see lib/geo.ts's relativeKm. */
+export type NearbyWorkerOffset = {
+  workerId: string;
+  dx: number;
+  dy: number;
 };

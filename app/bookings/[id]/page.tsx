@@ -37,8 +37,8 @@ export default async function BookingStatusPage({ params }: { params: Promise<{ 
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-10 sm:px-6 lg:px-8">
-      <Link href="/search" className="text-sm text-zinc-500 transition hover:text-brand-700 dark:hover:text-brand-400">
-        ← Find another technician
+      <Link href="/bookings" className="text-sm text-zinc-500 transition hover:text-brand-700 dark:hover:text-brand-400">
+        ← My bookings
       </Link>
       <BookingStatusView
         workerName={worker?.user.name ?? "your technician"}

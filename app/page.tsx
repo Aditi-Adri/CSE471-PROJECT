@@ -223,6 +223,15 @@ export default async function Home() {
               body="A single button pages every available verified technician within 3km for urgent household emergencies — first to respond gets routed straight to you."
             />
           </div>
+
+          <div className="mt-8 text-center">
+            <Link
+              href="/sos"
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 hover:underline dark:text-brand-400"
+            >
+              Try Emergency SOS →
+            </Link>
+          </div>
         </div>
       </section>
 

@@ -19,7 +19,7 @@ each independently, in any order; none of them depend on another being merged fi
 |---|------|-----------|----------------|
 | 1 | Shiva Prasad Sarkar | 23101302 | `shiva/common-workflows-dashboard` |
 | 2 | Aditi Roy Adri | 23101314 | `adri/module1-search-improvements` |
-| 3 | Jishan Ahmed Chowdhury | 23101041 | `jishan/module1-tracking-improvements` |
+| 3 | Jishan Ahmed Chowdhury | 23101041 | `jishan/live-tracking-sos` |
 | 4 | Sudiptha Roy | 23101044 | `sudipta/module1-real-booking` |
 
 Repo: `github.com/Aditi-Adri/CSE471-PROJECT`. Roles: **Customer**, **Worker**,
@@ -70,16 +70,20 @@ database:
    visible to both sides once generated (customer at `/bookings/[id]`, worker in their job
    list). The worker submitting it back is "this is genuinely the accepted worker's own
    authenticated session" more than a shared-secret boundary.
-5. **Live tracking** → ✅ built (Module 1 F3) but **still a separate system**. The real
-   booking flow above and the tracking demo (`app/track`, `/api/tracking/booking/assign`)
-   both write `Booking` rows but through unrelated code paths, and `WorkerLocation.workerId`
-   (tracking) isn't the same identity space as `Worker.id` (real bookings). Wiring these
-   into one flow (a confirmed real booking automatically starts a live-tracked trip) is the
-   next integration gap.
+5. **Live tracking** → ✅ built (Module 1 F3) and **on the same real `Booking`/`Worker`
+   rows as everything else** — no longer a separate system. A worker sharing their
+   location on a `CONFIRMED` booking (`components/tracking/WorkerLocationShare.tsx`) pushes
+   real GPS fixes straight onto that booking, and the same arrival-code gate above still
+   governs when `ARRIVED` actually happens (GPS proximity alone reports `etaMinutes: 0`,
+   it never sets the status itself — see the comment in `server.ts`'s `location:update`
+   handler for why that distinction matters).
 6. **Job completes** → ✅ real (`POST /api/bookings/[id]/complete`, customer-only, requires
    `ARRIVED` first). No payment/escrow behind it yet — Module 2 F3, unbuilt.
-7. **No worker available → post a request** — 🔴 not built, unassigned. Closest precedent
-   remains the SOS 3km broadcast (Module 1 F3), which is emergency-only.
+7. **No worker available → post a request** — 🔴 not built/wired up, unassigned. A
+   `JobRequest`/`JobRequestStatus` model exists in the schema (an initial, incomplete
+   attempt at this) but has no API routes or UI yet — don't be surprised to find it sitting
+   there unused. Closest *working* precedent remains the SOS 3km broadcast (Module 1 F3),
+   which is emergency-only.
 8. **Workers browse open work** (rather than just react to a booking or an SOS ping) — 🔴
    not built, unassigned.
 
@@ -93,7 +97,7 @@ database:
 - **Ownership comments in code**: every finished feature has a banner comment of the form
   `MODULE <n> -> FEATURE <n> (<Member>): <title>` directly above its Prisma models /
   main route file (see `prisma/schema.prisma`, `app/api/search/route.ts`,
-  `lib/ai/groqClient.ts`, `prisma/seed.ts`, `prisma/seedTracking.ts`,
+  `lib/ai/groqClient.ts`, `prisma/seed.ts`, `app/api/sos/route.ts`,
   `lib/booking/shapeBookingForViewer.ts`). Add the same style of banner to new schema
   blocks / route files for anything built from this doc.
 - **Prisma**: models for one feature are grouped under a single `====` banner comment in
@@ -118,7 +122,7 @@ database:
 |---|---|---|---|---|
 | 1 | Shiva | Multi-layer worker verification (NID match → skill test → police clearance) + digital badges | ✅ Built | `app/api/verification/tier1`, `tier2`, `tier3`, `app/dashboard/verification`, models `Tier1Verification`/`Tier2SkillTest`/`Tier3PoliceClearance`/`WorkerReference` |
 | 2 | Adri | Smart text search + AI category mapping + filters + map view | ✅ Built | `app/api/search` (rate-limited), `app/search`, `components/search/WorkerMapView.tsx` (List/Map toggle), model `SearchLog`, `lib/ai/groqClient.ts` + `lib/search/categoryMapper.ts` (Groq w/ keyword fallback) |
-| 3 | Jishan | Live worker tracking (map + ETA) + SOS emergency dispatch (3km radius) | ✅ Built | `app/api/tracking/**` (every route requires a signed-in session), `app/track`, `app/sos`, `server.ts`, models `WorkerLocation`/`SosRequest`/`Booking`. Dark theme scoped to this feature's own pages (`lib/ui/trackingTheme.ts`). SMS is mocked by team decision, not a gap (see stack table). **Remaining gap**: not wired to the real booking flow — step 5 of the booking-flow section above |
+| 3 | Jishan | Live worker tracking (map + ETA) + SOS emergency dispatch (3km radius) | ✅ Built (rebuilt on real data — the original had drifted into a self-contained demo with hardcoded coordinates and a client-only simulated GPS sender, disconnected from the real `Booking`/`Worker` flow; this replaces it end to end) | Real GPS via the browser's Geolocation API (free, no key) — `components/tracking/WorkerLocationShare.tsx` (booking-scoped, `location:update`) and `components/tracking/WorkerOnlinePanel.tsx` (standalone "go online", `worker:location`), both over the existing Socket.IO connection (`server.ts`). Range is a real Haversine query (`lib/geo.ts`) over online/available/verified `Worker` rows with a fresh `locationUpdatedAt` — see `app/api/sos/route.ts`. Accepting an SOS (`app/api/sos/[id]/accept`, race-safe via a conditional `updateMany`) creates a real `Booking` (CONFIRMED, real arrival code), so it's the same live map and arrival-code gate as any other booking from there — `components/tracking/LiveTrackingMap.tsx` on both `app/bookings/[id]` and the worker's job list. Customer trigger: `app/sos`, `components/sos/SosTrigger.tsx`. Models: `Worker.isOnline`/`currentLat`/`currentLng`/`locationUpdatedAt`, `SosRequest.bookingId`, `Booking` (the removed `WorkerLocation` demo table is gone). SMS is mocked by team decision, not a gap (see stack table) |
 | 4 | Sudiptha | Multi-address family portal + digital scope-lock engine — in concrete terms: real booking requests, bargaining, and an arrival-code gate on the customer's phone/address | ✅ **Built** (scope-lock/bargaining half) — see the booking-flow section above. 🔴 **Not built**: the multi-address/family-portal half — multiple saved properties, caretaker invites. `User.address` is a single field, not a list | `app/api/bookings/**`, `app/bookings/[id]`, `app/dashboard/worker-job` (`WorkerJobsList.tsx`), `components/booking/*`, `lib/booking/*` |
 
 ## Module 2: Trust, Quality & AI Analytics — 🔴 none built yet
