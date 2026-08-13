@@ -1,166 +1,95 @@
-// import { NextRequest, NextResponse } from "next/server";
-// import { prisma } from "@/lib/db";
-// import { relativeKm } from "@/lib/geo";
-
-// /**
-//  * GET /api/tracking/sos/[sosId]
-//  *
-//  * Returns the SOS request's current state, shaped to match the
-//  * "sos:accepted" socket payload emitted by the accept route.
-//  */
-// export async function GET(
-//   request: NextRequest,
-//   { params }: { params: Promise<{ sosId: string }> }
-// ) {
-//   const { sosId } = await params;
-
-//   try {
-//     const sos = await prisma.sosRequest.findUnique({ where: { id: sosId } });
-//     if (!sos) {
-//       return NextResponse.json({ error: "SOS request not found" }, { status: 404 });
-//     }
-
-//     // Workers who were alerted, plotted on the radar relative to the customer.
-//     const alertedWorkers = sos.alertedWorkerIds?.length
-//       ? await prisma.workerLocation.findMany({
-//           where: { workerId: { in: sos.alertedWorkerIds } },
-//         })
-//       : [];
-
-//     let accepted = null;
-//     if (sos.status === "ACCEPTED" && sos.acceptedWorkerId) {
-//       const worker = await prisma.workerLocation.findUnique({
-//         where: { workerId: sos.acceptedWorkerId },
-//       });
-      
-//       accepted = {
-//         sosId: sos.id,
-//         workerId: sos.acceptedWorkerId,
-//         etaMinutes: sos.etaMinutes, // Updated field name here
-//         worker: worker
-//           ? {
-//               name: worker.name,
-//               role: worker.role,
-//               rating: worker.rating,
-//               avatarInitials: worker.avatarInitials || worker.name.slice(0, 2).toUpperCase(),
-//             }
-//           : null,
-//         workerLocation: worker ? { lat: worker.lat, lng: worker.lng } : null,
-//       };
-//     }
-
-//     return NextResponse.json({
-//       sosId: sos.id,
-//       status: sos.status,
-//       radiusKm: sos.radiusKm,
-//       customerLocation: { lat: sos.lat, lng: sos.lng },
-//       alertedWorkerCount: sos.alertedWorkerIds?.length || 0,
-//       nearbyWorkers: alertedWorkers.map((w) => ({
-//         workerId: w.workerId,
-//         name: w.name,
-//         ...relativeKm({ lat: sos.lat, lng: sos.lng }, w),
-//       })),
-//       accepted,
-//       createdAt: sos.createdAt,
-//     });
-//   } catch (error) {
-//     console.error("Error fetching SOS request:", error);
-//     return NextResponse.json(
-//       { error: (error as Error).message || "Internal server error" },
-//       { status: 500 }
-//     );
-//   }
-// }
-
-import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth/authOptions";
 import { prisma } from "@/lib/db";
+import { checkRateLimit, getClientIp } from "@/lib/auth/rateLimit";
+import { withErrorHandling } from "@/lib/api/withErrorHandling";
 
 /**
  * POST /api/tracking/sos/[sosId]/accept
+ * body: { workerId: string, etaMinutes?: number }
  *
- * Marks an SOS request as ACCEPTED by a given worker in Prisma
- * and returns the payload expected by the client and WebSockets listener.
+ * Marks an SOS request as ACCEPTED by a given worker.
+ *
+ * This used to accept any `workerId` string from an unauthenticated
+ * request — anyone could "accept" any SOS as any worker. `WorkerLocation`
+ * isn't foreign-keyed to a real User (it's seeded demo data, see
+ * docs/FEATURE_SPEC.md), so this can't fully verify the caller *is*
+ * that worker — but it now requires a real signed-in Worker account,
+ * and requires `workerId` to actually be one of the workers this SOS
+ * paged (`alertedWorkerIds`), not an arbitrary string.
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ sosId: string }> }
-) {
-  const { sosId } = await params;
+export const POST = withErrorHandling(
+  async (request: Request, { params }: { params: Promise<{ sosId: string }> }) => {
+    const { sosId } = await params;
 
-  try {
-    const body = await request.json();
-    const { workerId, etaMinutes = 5 } = body;
-
-    if (!workerId) {
-      return NextResponse.json(
-        { error: "workerId is required" },
-        { status: 400 }
-      );
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return Response.json({ error: "You must be signed in." }, { status: 401 });
+    }
+    if (session.user.role !== "WORKER") {
+      return Response.json({ error: "Only worker accounts can accept an SOS." }, { status: 403 });
     }
 
-    // 1. Fetch the SOS request
-    const existingSos = await prisma.sosRequest.findUnique({
-      where: { id: sosId },
-    });
+    const ip = getClientIp(request);
+    const rateLimit = checkRateLimit(`sos-accept:${session.user.id}:${ip}`, 20, 10 * 60 * 1000);
+    if (!rateLimit.allowed) {
+      return Response.json({ error: "Too many attempts. Please try again shortly." }, { status: 429 });
+    }
 
+    const body = await request.json().catch(() => null);
+    const workerId = body?.workerId;
+    const etaMinutes = typeof body?.etaMinutes === "number" ? body.etaMinutes : 5;
+    if (!workerId) {
+      return Response.json({ error: "workerId is required" }, { status: 400 });
+    }
+
+    const existingSos = await prisma.sosRequest.findUnique({ where: { id: sosId } });
     if (!existingSos) {
-      return NextResponse.json(
-        { error: "SOS request not found" },
-        { status: 404 }
-      );
+      return Response.json({ error: "SOS request not found" }, { status: 404 });
     }
 
     // Guard against race conditions if another worker accepted first
     if (existingSos.status === "ACCEPTED") {
-      return NextResponse.json(
+      return Response.json(
         { error: "SOS request has already been accepted by another worker" },
         { status: 409 }
       );
     }
 
-    // 2. Fetch worker info from Prisma
-    const worker = await prisma.workerLocation.findUnique({
-      where: { workerId },
-    });
+    if (!existingSos.alertedWorkerIds.includes(workerId)) {
+      return Response.json(
+        { error: "This SOS request wasn't sent to that worker." },
+        { status: 403 }
+      );
+    }
 
-    // 3. Update the SOS status in Prisma
+    const worker = await prisma.workerLocation.findUnique({ where: { workerId } });
+
     const updatedSos = await prisma.sosRequest.update({
       where: { id: sosId },
       data: {
         status: "ACCEPTED",
         acceptedWorkerId: workerId,
-        etaMinutes: etaMinutes,
+        etaMinutes,
       },
     });
 
-    // 4. Construct payload (matches the "accepted" format in your GET route)
-    const acceptedPayload = {
-      sosId: updatedSos.id,
-      workerId: updatedSos.acceptedWorkerId,
-      etaMinutes: updatedSos.etaMinutes,
-      worker: worker
-        ? {
-            name: worker.name,
-            role: worker.role,
-            rating: worker.rating,
-            avatarInitials:
-              worker.avatarInitials || worker.name.slice(0, 2).toUpperCase(),
-          }
-        : {
-            name: "Verified Worker",
-            role: "Technician",
-            rating: 5.0,
-            avatarInitials: "VW",
-          },
-      workerLocation: worker ? { lat: worker.lat, lng: worker.lng } : null,
-    };
-
-    return NextResponse.json(acceptedPayload, { status: 200 });
-  } catch (error) {
-    console.error("Error accepting SOS request:", error);
-    return NextResponse.json(
-      { error: (error as Error).message || "Failed to accept SOS" },
-      { status: 500 }
+    return Response.json(
+      {
+        sosId: updatedSos.id,
+        workerId: updatedSos.acceptedWorkerId,
+        etaMinutes: updatedSos.etaMinutes,
+        worker: worker
+          ? {
+              name: worker.name,
+              role: worker.role,
+              rating: worker.rating,
+              avatarInitials: worker.avatarInitials || worker.name.slice(0, 2).toUpperCase(),
+            }
+          : { name: "Verified Worker", role: "Technician", rating: 5.0, avatarInitials: "VW" },
+        workerLocation: worker ? { lat: worker.lat, lng: worker.lng } : null,
+      },
+      { status: 200 }
     );
   }
-}
+);

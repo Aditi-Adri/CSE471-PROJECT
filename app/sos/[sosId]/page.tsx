@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import SosRadar from "@/components/tracking/SosRadar";
 import { useSocket } from "@/lib/hooks/useSocket";
 import type { SosApiResponse, AcceptedSosWorker } from "@/lib/types/tracking";
+import { trackingPageBackground } from "@/lib/ui/trackingTheme";
 
 // Page: /sos/[sosId] - Emergency dispatch UI
 export default function SosPage() {
@@ -57,7 +58,7 @@ export default function SosPage() {
   const alertedCount = sos?.alertedWorkerCount ?? 0;
 
   return (
-    <div style={{ minHeight: "100vh", paddingTop: "0px" }}>
+    <div style={{ ...trackingPageBackground, minHeight: "100vh", paddingTop: "0px" }}>
       <main
         style={{
           width: "100%",

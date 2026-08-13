@@ -7,6 +7,7 @@ import LiveTrackingMap from "@/components/tracking/LiveTrackingMap";
 import WorkerLocationSender from "@/components/tracking/WorkerLocationSender";
 import SOSButton from "@/components/tracking/SOSButton";
 import type { TrackingApiResponse } from "@/lib/types/tracking";
+import { trackingPageBackground } from "@/lib/ui/trackingTheme";
 
 export default function TrackBookingPage() {
   const params = useParams<{ bookingId: string }>();
@@ -33,7 +34,7 @@ export default function TrackBookingPage() {
   const smsSent = booking.tenMinuteAlertSent;
 
   return (
-    <div style={{ minHeight: "100vh" }}>
+    <div style={{ ...trackingPageBackground, minHeight: "100vh" }}>
       {/* Centered AppHeader without rightSlot */}
       <AppHeader
         pillLabel="Live Tracking"
