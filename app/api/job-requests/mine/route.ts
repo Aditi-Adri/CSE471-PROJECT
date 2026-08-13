@@ -9,11 +9,23 @@ import { withErrorHandling } from "@/lib/api/withErrorHandling";
  * The requests the signed-in user has posted themselves — every
  * status, not just OPEN (see GET /api/job-requests, the worker-facing
  * browse list, which is the opposite: OPEN-only, not scoped to a
- * customer). When one's been claimed, this is also how the customer
- * finds out and sees who claimed it — no separate notification system
+ * customer). While OPEN, this is where the customer reviews every
+ * applicant's profile and picks one via POST .../hire — "using his
+ * profile and everything." Once HIRED, it's how the customer finds
+ * out and sees who they hired — no separate notification system
  * exists (that's Module 3's real-time chat/notifications, unbuilt);
  * checking this page is the notification, for now.
  */
+const applicantWorkerSelect = {
+  id: true,
+  headline: true,
+  verificationTier: true,
+  ratingAvg: true,
+  ratingCount: true,
+  avatarSeed: true,
+  user: { select: { name: true } },
+} as const;
+
 export const GET = withErrorHandling(async () => {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
@@ -31,17 +43,11 @@ export const GET = withErrorHandling(async () => {
       budgetMaxBdt: true,
       status: true,
       createdAt: true,
-      claimedAt: true,
-      claimedBy: {
-        select: {
-          id: true,
-          headline: true,
-          verificationTier: true,
-          ratingAvg: true,
-          ratingCount: true,
-          avatarSeed: true,
-          user: { select: { name: true } },
-        },
+      hiredAt: true,
+      hiredWorker: { select: applicantWorkerSelect },
+      applications: {
+        orderBy: { appliedAt: "asc" },
+        select: { id: true, appliedAt: true, worker: { select: applicantWorkerSelect } },
       },
     },
   });

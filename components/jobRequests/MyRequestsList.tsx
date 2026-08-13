@@ -7,9 +7,10 @@ import { VerificationBadge } from "@/components/search/VerificationBadge";
 import { RatingStars } from "@/components/search/RatingStars";
 import { AREA_LABEL_BY_VALUE } from "@/lib/constants/dhakaAreas";
 import { formatBdt } from "@/lib/format";
+import { primaryButtonClasses } from "@/lib/ui/formStyles";
 import type { DhakaArea, VerificationTier } from "@/app/generated/prisma/client";
 
-type ClaimedByWorker = {
+type ApplicantWorker = {
   id: string;
   headline: string;
   verificationTier: VerificationTier;
@@ -19,33 +20,83 @@ type ClaimedByWorker = {
   user: { name: string };
 };
 
+type Application = {
+  id: string;
+  appliedAt: string;
+  worker: ApplicantWorker;
+};
+
 type MyRequestItem = {
   id: string;
   description: string;
   area: DhakaArea;
   budgetMinBdt: number | null;
   budgetMaxBdt: number | null;
-  status: "OPEN" | "CLAIMED";
+  status: "OPEN" | "HIRED";
   createdAt: string;
-  claimedAt: string | null;
-  claimedBy: ClaimedByWorker | null;
+  hiredAt: string | null;
+  hiredWorker: ApplicantWorker | null;
+  applications: Application[];
 };
 
+function WorkerSummary({ worker }: { worker: ApplicantWorker }) {
+  return (
+    <>
+      <Avatar name={worker.user.name} seed={worker.avatarSeed} size={40} />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-50">{worker.user.name}</p>
+        <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{worker.headline}</p>
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <VerificationBadge tier={worker.verificationTier} compact />
+          <RatingStars ratingAvg={worker.ratingAvg} ratingCount={worker.ratingCount} />
+        </div>
+      </div>
+    </>
+  );
+}
+
 /**
- * The customer's own posted requests — /dashboard/my-requests. This is
- * how they find out a request got claimed: no push/email notification
- * exists (that's the unbuilt Module 3 chat/notifications feature), so
- * checking here *is* the notification for now.
+ * The customer's own posted requests — /dashboard/my-requests. While a
+ * request is OPEN, this is where the customer reviews every worker who
+ * applied — full profile, rating, verification — and hires exactly one.
+ * There's no push/email notification (that's Module 3's unbuilt chat
+ * feature), so checking here *is* the notification for now, both for
+ * "someone applied" and for confirming who got hired.
  */
 export function MyRequestsList() {
   const [requests, setRequests] = useState<MyRequestItem[] | null>(null);
+  const [hiring, setHiring] = useState<string | null>(null); // `${jobRequestId}:${workerId}`
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  function refetch() {
     fetch("/api/job-requests/mine")
       .then((res) => res.json())
       .then((data: { requests: MyRequestItem[] }) => setRequests(data.requests ?? []))
       .catch(() => setRequests([]));
-  }, []);
+  }
+
+  useEffect(refetch, []);
+
+  async function handleHire(jobRequestId: string, workerId: string) {
+    const key = `${jobRequestId}:${workerId}`;
+    setHiring(key);
+    setError(null);
+    try {
+      const res = await fetch(`/api/job-requests/${jobRequestId}/hire`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workerId }),
+      });
+      if (res.ok) {
+        refetch();
+      } else {
+        const body = await res.json().catch(() => null);
+        setError(body?.error ?? "Couldn't hire this worker.");
+      }
+    } finally {
+      setHiring(null);
+    }
+  }
 
   if (requests === null) {
     return <div className="h-32 animate-pulse rounded-2xl bg-zinc-100 dark:bg-zinc-900" />;
@@ -62,6 +113,8 @@ export function MyRequestsList() {
 
   return (
     <div className="flex flex-col gap-3">
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+
       {requests.map((r) => (
         <div
           key={r.id}
@@ -71,12 +124,12 @@ export function MyRequestsList() {
             <p className="text-sm text-zinc-900 dark:text-zinc-50">{r.description}</p>
             <span
               className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                r.status === "CLAIMED"
+                r.status === "HIRED"
                   ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
                   : "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300"
               }`}
             >
-              {r.status === "CLAIMED" ? "Claimed" : "Waiting for a technician"}
+              {r.status === "HIRED" ? "Hired" : "Waiting for applicants"}
             </span>
           </div>
 
@@ -90,25 +143,52 @@ export function MyRequestsList() {
             )}
           </div>
 
-          {r.claimedBy && (
+          {r.status === "HIRED" && r.hiredWorker && (
             <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 dark:border-emerald-900 dark:bg-emerald-950/20">
-              <Avatar name={r.claimedBy.user.name} seed={r.claimedBy.avatarSeed} size={40} />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-50">
-                  {r.claimedBy.user.name}
-                </p>
-                <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{r.claimedBy.headline}</p>
-                <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <VerificationBadge tier={r.claimedBy.verificationTier} compact />
-                  <RatingStars ratingAvg={r.claimedBy.ratingAvg} ratingCount={r.claimedBy.ratingCount} />
-                </div>
-              </div>
+              <WorkerSummary worker={r.hiredWorker} />
               <Link
-                href={`/workers/${r.claimedBy.id}`}
+                href={`/workers/${r.hiredWorker.id}`}
                 className="shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700"
               >
                 View profile
               </Link>
+            </div>
+          )}
+
+          {r.status === "OPEN" && (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                {r.applications.length === 0
+                  ? "No applicants yet."
+                  : `${r.applications.length} applicant${r.applications.length === 1 ? "" : "s"}`}
+              </p>
+              {r.applications.map((app) => {
+                const key = `${r.id}:${app.worker.id}`;
+                return (
+                  <div
+                    key={app.id}
+                    className="flex items-center gap-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800"
+                  >
+                    <WorkerSummary worker={app.worker} />
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Link
+                        href={`/workers/${app.worker.id}`}
+                        className="text-xs font-medium text-brand-700 hover:underline dark:text-brand-400"
+                      >
+                        View profile
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => handleHire(r.id, app.worker.id)}
+                        disabled={hiring === key}
+                        className={`${primaryButtonClasses} mt-0 px-3 py-1.5 text-xs`}
+                      >
+                        {hiring === key ? "Hiring…" : "Hire"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

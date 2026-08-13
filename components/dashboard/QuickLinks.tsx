@@ -37,7 +37,7 @@ function getQuickLinks(role: Role, hasWorkerProfile: boolean): QuickLink[] {
         {
           href: "/dashboard/my-requests",
           title: "My requests",
-          description: "Jobs you posted that didn't match a regular category — see if one's been claimed.",
+          description: "Jobs you posted that didn't match a regular category — review applicants and hire one.",
           icon: MessageIcon,
         },
       ];
@@ -65,6 +65,12 @@ function getQuickLinks(role: Role, hasWorkerProfile: boolean): QuickLink[] {
           title: "Jobs & earnings",
           description: "See your active job summary and base pricing.",
           icon: WrenchIcon,
+        },
+        {
+          href: "/dashboard/my-applications",
+          title: "My applications",
+          description: "See which open requests you've applied to, and whether you got hired.",
+          icon: MessageIcon,
         },
       ];
 

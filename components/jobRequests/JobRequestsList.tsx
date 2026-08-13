@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { DHAKA_AREAS, AREA_LABEL_BY_VALUE } from "@/lib/constants/dhakaAreas";
 import { formatBdt } from "@/lib/format";
-import { inputClasses, primaryButtonClasses } from "@/lib/ui/formStyles";
+import { inputClasses, primaryButtonClasses, secondaryButtonClasses } from "@/lib/ui/formStyles";
 import type { DhakaArea } from "@/app/generated/prisma/client";
 
 type JobRequestItem = {
@@ -14,6 +14,8 @@ type JobRequestItem = {
   budgetMaxBdt: number | null;
   createdAt: string;
   customer: { name: string };
+  applicantCount: number;
+  hasApplied: boolean;
 };
 
 /** A flat job budget, not an hourly rate — so no "/hr" suffix here, unlike a Worker's rate range. */
@@ -25,14 +27,17 @@ function formatBudget(minBdt: number | null, maxBdt: number | null): string | nu
 }
 
 /**
- * The worker-facing browse/claim list at /dashboard/job-requests — the
+ * The worker-facing browse/apply list at /dashboard/job-requests — the
  * mirror image of the customer's search: same "filter by area" idea,
- * pointed at open JobRequests instead of Workers.
+ * pointed at open JobRequests instead of Workers. Any number of
+ * workers can apply to the same request, so it stays listed here for
+ * everyone else until the customer hires someone (see
+ * /dashboard/my-applications for what happens after applying).
  */
 export function JobRequestsList() {
   const [area, setArea] = useState("");
   const [requests, setRequests] = useState<JobRequestItem[] | null>(null);
-  const [claimingId, setClaimingId] = useState<string | null>(null);
+  const [applyingId, setApplyingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   function refetch() {
@@ -45,20 +50,20 @@ export function JobRequestsList() {
 
   useEffect(refetch, [area]);
 
-  async function handleClaim(id: string) {
-    setClaimingId(id);
+  async function handleApply(id: string) {
+    setApplyingId(id);
     setMessage(null);
     try {
-      const res = await fetch(`/api/job-requests/${id}`, { method: "PATCH" });
+      const res = await fetch(`/api/job-requests/${id}/apply`, { method: "POST" });
       if (res.ok) {
-        setMessage("Claimed — reach out using the details below.");
+        setMessage("Applied — see /dashboard/my-applications once the customer picks someone.");
         refetch();
       } else {
         const body = await res.json().catch(() => null);
-        setMessage(body?.error ?? "Couldn't claim this request.");
+        setMessage(body?.error ?? "Couldn't apply to this request.");
       }
     } finally {
-      setClaimingId(null);
+      setApplyingId(null);
     }
   }
 
@@ -98,15 +103,26 @@ export function JobRequestsList() {
                   <span>💵 {formatBudget(r.budgetMinBdt, r.budgetMaxBdt)}</span>
                 )}
                 <span>Posted by {r.customer.name}</span>
+                {r.applicantCount > 0 && (
+                  <span>
+                    {r.applicantCount} worker{r.applicantCount === 1 ? "" : "s"} applied
+                  </span>
+                )}
               </div>
-              <button
-                type="button"
-                onClick={() => handleClaim(r.id)}
-                disabled={claimingId === r.id}
-                className={`${primaryButtonClasses} mt-1 self-start px-4 py-2`}
-              >
-                {claimingId === r.id ? "Claiming…" : "I'll take this"}
-              </button>
+              {r.hasApplied ? (
+                <button type="button" disabled className={`${secondaryButtonClasses} mt-1 self-start px-4 py-2`}>
+                  Applied ✓
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleApply(r.id)}
+                  disabled={applyingId === r.id}
+                  className={`${primaryButtonClasses} mt-1 self-start px-4 py-2`}
+                >
+                  {applyingId === r.id ? "Applying…" : "Apply for this job"}
+                </button>
+              )}
             </div>
           ))}
         </div>

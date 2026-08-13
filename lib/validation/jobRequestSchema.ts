@@ -27,3 +27,10 @@ export const listJobRequestsSchema = z.object({
 });
 
 export type ListJobRequestsInput = z.infer<typeof listJobRequestsSchema>;
+
+/** POST /api/job-requests/[id]/hire — the customer picking one applicant. */
+export const hireApplicantSchema = z.object({
+  workerId: z.string().min(1, "Pick which worker to hire."),
+});
+
+export type HireApplicantInput = z.infer<typeof hireApplicantSchema>;

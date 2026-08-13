@@ -10,10 +10,13 @@ import type { DhakaArea } from "@/app/generated/prisma/client";
 /**
  * GET /api/job-requests?area=...
  *
- * Open (unclaimed) job requests, newest first — the list a worker
- * browses on /dashboard/job-requests. Signed-in only (any role can
- * technically call this; only the worker-only /dashboard page links to
- * it), same "must be signed in" bar as the rest of the account area.
+ * Open (not yet filled) job requests, newest first — the list a worker
+ * browses on /dashboard/job-requests. Stays visible to every worker
+ * until the customer hires someone (status flips to HIRED), not until
+ * the first application — any number of workers can apply. Signed-in
+ * only (any role can technically call this; only the worker-only
+ * /dashboard page links to it), same "must be signed in" bar as the
+ * rest of the account area.
  */
 export const GET = withErrorHandling(async (request: Request) => {
   const session = await getServerSession(authOptions);
@@ -29,6 +32,13 @@ export const GET = withErrorHandling(async (request: Request) => {
     return Response.json({ error: "Invalid filter." }, { status: 400 });
   }
 
+  // Only workers apply, so only bother checking "did I already apply"
+  // for a signed-in worker — everyone else just sees the plain list.
+  const worker = await prisma.worker.findUnique({
+    where: { userId: session.user.id },
+    select: { id: true },
+  });
+
   const requests = await prisma.jobRequest.findMany({
     where: {
       status: "OPEN",
@@ -43,10 +53,20 @@ export const GET = withErrorHandling(async (request: Request) => {
       budgetMaxBdt: true,
       createdAt: true,
       customer: { select: { name: true } },
+      _count: { select: { applications: true } },
+      applications: worker
+        ? { where: { workerId: worker.id }, select: { id: true }, take: 1 }
+        : false,
     },
   });
 
-  return Response.json({ requests });
+  const shaped = requests.map(({ applications, _count, ...rest }) => ({
+    ...rest,
+    applicantCount: _count.applications,
+    hasApplied: worker ? applications.length > 0 : false,
+  }));
+
+  return Response.json({ requests: shaped });
 });
 
 /**
