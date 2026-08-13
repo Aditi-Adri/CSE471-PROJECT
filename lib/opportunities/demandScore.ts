@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
-import { distanceKm } from "@/lib/geo";
 import { DHAKA_AREA_COORDS } from "@/lib/constants/dhakaAreaCoords";
 import { AREA_LABEL_BY_VALUE } from "@/lib/constants/dhakaAreas";
+import { bucketByNearestArea, computeShortageScore, RECENT_DAYS } from "./demandScoreMath";
 import type { DhakaArea } from "@/app/generated/prisma/client";
 
 /**
@@ -24,26 +24,11 @@ import type { DhakaArea } from "@/app/generated/prisma/client";
  *     JobRequest that doesn't require the customer to post anything.
  *   - Worker (isAvailableNow): the supply side.
  *
- * Score = weighted demand ÷ (available workers + 1). Dividing by
- * supply (not just ranking raw demand) is the whole point — an area
- * with 10 requests and 20 workers isn't "hot," one with 3 requests and
- * 0 workers is. The +1 avoids a division by zero for an area with no
- * workers at all, which is exactly the case we most want to surface.
+ * The actual weighting/scoring math lives in demandScoreMath.ts, kept
+ * free of any `@/lib/db` import so it has a unit test that runs with
+ * no database or env setup — this file is just the part that fetches
+ * real rows and calls it.
  */
-
-// How much each signal counts toward "demand." JobRequest is weighted
-// highest because it's an explicit, unambiguous request a human typed;
-// SosRequest next because it's urgent even though transient; Booking
-// and the failed-search signal are the softest (routine and
-// automatic, respectively).
-const WEIGHTS = {
-  openJobRequests: 3,
-  recentSosRequests: 2,
-  recentBookings: 1,
-  recentFailedSearches: 1,
-} as const;
-
-const RECENT_DAYS = 30;
 
 export type OpportunityArea = {
   area: DhakaArea;
@@ -57,29 +42,6 @@ export type OpportunityArea = {
   availableWorkers: number;
   score: number;
 };
-
-/** Snaps a real lat/lng to the closest of the 22 neighborhood centroids. */
-function nearestArea(lat: number, lng: number): DhakaArea {
-  let best: DhakaArea = "GULSHAN";
-  let bestDist = Infinity;
-  for (const [area, coord] of Object.entries(DHAKA_AREA_COORDS) as [DhakaArea, { lat: number; lng: number }][]) {
-    const d = distanceKm(lat, lng, coord.lat, coord.lng);
-    if (d < bestDist) {
-      bestDist = d;
-      best = area;
-    }
-  }
-  return best;
-}
-
-function bucketByNearestArea(points: { lat: number; lng: number }[]): Map<DhakaArea, number> {
-  const counts = new Map<DhakaArea, number>();
-  for (const p of points) {
-    const area = nearestArea(p.lat, p.lng);
-    counts.set(area, (counts.get(area) ?? 0) + 1);
-  }
-  return counts;
-}
 
 export async function getOpportunityAreas(): Promise<OpportunityArea[]> {
   const since = new Date(Date.now() - RECENT_DAYS * 24 * 60 * 60 * 1000);
@@ -131,12 +93,6 @@ export async function getOpportunityAreas(): Promise<OpportunityArea[]> {
     const failedSearchCount = failedSearchesByArea.get(area) ?? 0;
     const workerCount = workersByArea.get(area) ?? 0;
 
-    const demand =
-      openJobRequestCount * WEIGHTS.openJobRequests +
-      sosCount * WEIGHTS.recentSosRequests +
-      bookingCount * WEIGHTS.recentBookings +
-      failedSearchCount * WEIGHTS.recentFailedSearches;
-
     return {
       area,
       label: AREA_LABEL_BY_VALUE.get(area) ?? area,
@@ -147,7 +103,13 @@ export async function getOpportunityAreas(): Promise<OpportunityArea[]> {
       recentSosRequests: sosCount,
       recentFailedSearches: failedSearchCount,
       availableWorkers: workerCount,
-      score: demand / (workerCount + 1),
+      score: computeShortageScore({
+        openJobRequests: openJobRequestCount,
+        recentSosRequests: sosCount,
+        recentBookings: bookingCount,
+        recentFailedSearches: failedSearchCount,
+        availableWorkers: workerCount,
+      }),
     };
   });
 
