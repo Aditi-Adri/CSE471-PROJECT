@@ -3,6 +3,7 @@ import {
   ClipboardCheckIcon,
   IdCardIcon,
   ShieldCheckIcon,
+  SirenIcon,
   WrenchIcon,
 } from "@/components/marketing/icons";
 import type { Role } from "@/app/generated/prisma/client";
@@ -38,6 +39,12 @@ function getQuickLinks(role: Role, hasWorkerProfile: boolean): QuickLink[] {
           title: "My bookings",
           description: "See who you've booked, negotiate a rate, and track the arrival code.",
           icon: ClipboardCheckIcon,
+        },
+        {
+          href: "/sos",
+          title: "Emergency SOS",
+          description: "One tap alerts every verified technician online within 3km of you.",
+          icon: SirenIcon,
         },
       ];
 

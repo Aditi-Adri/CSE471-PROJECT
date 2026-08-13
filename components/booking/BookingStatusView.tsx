@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { formatCurrency } from "@/lib/booking/bookingFlow";
 import { cardClasses, errorBannerClasses, primaryButtonClasses, successBannerClasses } from "@/lib/ui/formStyles";
+import { LiveTrackingMap } from "@/components/tracking/LiveTrackingMap";
 
 type BookingDetail = {
   id: string;
@@ -13,7 +14,11 @@ type BookingDetail = {
   arrivalCode: string | null;
   arrivalVerifiedAt: string | null;
   serviceAddress: string | null;
+  destinationLat: number;
+  destinationLng: number;
 };
+
+const TRACKABLE_STATUSES = new Set(["CONFIRMED", "ARRIVED"]);
 
 const STATUS_COPY: Record<string, string> = {
   PENDING_ACCEPTANCE: "Waiting for the technician to respond.",
@@ -126,7 +131,10 @@ export function BookingStatusView({ workerName, initial }: { workerName: string;
       {(booking.status === "CONFIRMED" || booking.status === "ARRIVED" || booking.status === "COMPLETED") && (
         <div className="mt-4 space-y-2 text-sm text-zinc-600 dark:text-zinc-400">
           <p>
-            Agreed rate: <span className="font-semibold text-zinc-900 dark:text-zinc-100">{formatCurrency(booking.agreedRateBdt ?? 0)}</span>
+            Agreed rate:{" "}
+            <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+              {booking.agreedRateBdt != null ? formatCurrency(booking.agreedRateBdt) : "To be agreed on arrival"}
+            </span>
           </p>
           {booking.status === "CONFIRMED" && booking.arrivalCode && (
             <p>
@@ -145,6 +153,15 @@ export function BookingStatusView({ workerName, initial }: { workerName: string;
         <button type="button" disabled={isSubmitting} onClick={markComplete} className={`mt-4 ${primaryButtonClasses}`}>
           Mark job complete
         </button>
+      )}
+
+      {TRACKABLE_STATUSES.has(booking.status) && (
+        <div className="mt-4">
+          <LiveTrackingMap
+            bookingId={booking.id}
+            destination={{ lat: booking.destinationLat, lng: booking.destinationLng }}
+          />
+        </div>
       )}
 
       {booking.status === "COMPLETED" && (

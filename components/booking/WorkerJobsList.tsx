@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { formatCurrency } from "@/lib/booking/bookingFlow";
 import { cardClasses, errorBannerClasses, inputClasses, primaryButtonClasses } from "@/lib/ui/formStyles";
+import { WorkerLocationShare } from "@/components/tracking/WorkerLocationShare";
+import { LiveTrackingMap } from "@/components/tracking/LiveTrackingMap";
 
 type JobBooking = {
   id: string;
@@ -15,6 +17,8 @@ type JobBooking = {
   arrivalVerifiedAt: string | null;
   serviceAddress: string | null;
   customerPhone: string | null;
+  destinationLat: number;
+  destinationLng: number;
   createdAt: string;
 };
 
@@ -177,26 +181,35 @@ function JobCard({ job, onChange }: { job: JobBooking; onChange: () => void }) {
       )}
 
       {job.status === "CONFIRMED" && (
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            Agreed rate: <span className="font-semibold text-zinc-900 dark:text-zinc-100">{formatCurrency(job.agreedRateBdt ?? 0)}</span>
-            {" — "}enter the arrival code shown in your app once you&apos;re heading out:
-          </p>
-          <input
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            maxLength={4}
-            placeholder="Code"
-            className={`${inputClasses} w-24`}
-          />
-          <button
-            type="button"
-            disabled={isSubmitting || !code}
-            onClick={verifyCode}
-            className={primaryButtonClasses}
-          >
-            Confirm
-          </button>
+        <div className="mt-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              Agreed rate:{" "}
+              <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                {job.agreedRateBdt != null ? formatCurrency(job.agreedRateBdt) : "To be agreed on arrival"}
+              </span>
+              {" — "}enter the arrival code shown in your app once you&apos;re heading out:
+            </p>
+            <input
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              maxLength={4}
+              placeholder="Code"
+              className={`${inputClasses} w-24`}
+            />
+            <button
+              type="button"
+              disabled={isSubmitting || !code}
+              onClick={verifyCode}
+              className={primaryButtonClasses}
+            >
+              Confirm
+            </button>
+          </div>
+          <WorkerLocationShare bookingId={job.id} />
+          <div className="mt-3">
+            <LiveTrackingMap bookingId={job.id} destination={{ lat: job.destinationLat, lng: job.destinationLng }} />
+          </div>
         </div>
       )}
 

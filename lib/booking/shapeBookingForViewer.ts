@@ -23,6 +23,13 @@ export function shapeBookingForViewer(booking: Booking, viewer: "customer" | "wo
     arrivalVerifiedAt: booking.arrivalVerifiedAt,
     serviceAddress: revealed ? booking.serviceAddress : null,
     customerPhone: revealed ? booking.customerPhone : null,
+    // Never gated the way serviceAddress/customerPhone are — the worker
+    // needs the pin to navigate there in the first place (see
+    // components/tracking/LiveTrackingMap.tsx), and it's a coordinate on
+    // a map, not written contact/address detail.
+    destinationLat: booking.destinationLat,
+    destinationLng: booking.destinationLng,
+    etaMinutes: booking.etaMinutes,
     createdAt: booking.createdAt,
     updatedAt: booking.updatedAt,
   };

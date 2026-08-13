@@ -7,7 +7,6 @@ import { distanceKm } from "./lib/geo";
 import { estimateEtaMinutesFallback } from "./lib/eta";
 import { sendSms } from "./lib/twilio";
 import { setIO } from "./lib/socketServer";
-import type { BookingStatus } from "./app/generated/prisma/client";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT || "3000", 10);
@@ -35,6 +34,36 @@ app.prepare().then(() => {
       if (bookingId) socket.join(`tracking:${bookingId}`);
     });
 
+    /**
+     * Standalone location ping from a worker who's "online" (see
+     * POST /api/worker/status) but not necessarily mid-job — this is
+     * what keeps Worker.currentLat/currentLng fresh enough for the SOS
+     * proximity query in app/api/sos/route.ts to find them. Booking-scoped
+     * tracking (above) also keeps this fresh while a job is in progress,
+     * so a worker who's mid-job doesn't need to send both.
+     *
+     * Like `worker:register`/`location:update`, this trusts the
+     * client-supplied `workerId` rather than re-deriving it from a
+     * session — this socket server has no auth layer of its own. Every
+     * write that actually matters (going online, accepting an SOS,
+     * creating the resulting booking) happens over the authenticated
+     * REST API instead; this only ever moves a live position on the map.
+     */
+    socket.on(
+      "worker:location",
+      async ({ workerId, lat, lng }: { workerId?: string; lat?: number; lng?: number }) => {
+        if (!workerId || lat == null || lng == null) return;
+        try {
+          await prisma.worker.update({
+            where: { id: workerId },
+            data: { currentLat: lat, currentLng: lng, locationUpdatedAt: new Date() },
+          });
+        } catch (err: unknown) {
+          console.error("worker:location handler failed:", err instanceof Error ? err.message : err);
+        }
+      }
+    );
+
     socket.on(
       "location:update",
       async ({ bookingId, lat, lng }: { bookingId?: string; lat?: number; lng?: number }) => {
@@ -48,16 +77,20 @@ app.prepare().then(() => {
           const hasArrived = distance < 0.05; // ~50m
           const etaMinutes = hasArrived ? 0 : estimateEtaMinutesFallback(distance);
 
-          const data: {
-            etaMinutes: number;
-            status?: BookingStatus;
-            tenMinuteAlertSent?: boolean;
-          } = { etaMinutes };
+          // GPS proximity alone never flips `status` to ARRIVED — that's
+          // the arrival-code verification's job (see
+          // app/api/bookings/[id]/verify-code/route.ts), which is also
+          // what sets `arrivalVerifiedAt` and reveals the customer's
+          // address/phone to the worker. If this GPS check set ARRIVED
+          // on its own, verify-code (which only accepts a still-CONFIRMED
+          // booking) would permanently reject the real code afterward,
+          // silently bypassing that whole safety gate. This still
+          // reports `etaMinutes: 0` so the UI can nudge "you've arrived —
+          // enter the code", it just doesn't act on it by itself.
+          const data: { etaMinutes: number; tenMinuteAlertSent?: boolean } = { etaMinutes };
           let shouldSendTenMinAlert = false;
 
-          if (hasArrived) {
-            data.status = "ARRIVED";
-          } else if (etaMinutes <= 10 && !booking.tenMinuteAlertSent) {
+          if (!hasArrived && etaMinutes <= 10 && !booking.tenMinuteAlertSent) {
             data.tenMinuteAlertSent = true;
             shouldSendTenMinAlert = true;
           }
@@ -65,8 +98,11 @@ app.prepare().then(() => {
           await prisma.booking.update({ where: { id: bookingId }, data });
 
           if (booking.workerId) {
-            await prisma.workerLocation
-              .update({ where: { workerId: booking.workerId }, data: { lat, lng } })
+            await prisma.worker
+              .update({
+                where: { id: booking.workerId },
+                data: { currentLat: lat, currentLng: lng, locationUpdatedAt: new Date() },
+              })
               .catch(() => {});
           }
 
