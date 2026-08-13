@@ -125,17 +125,17 @@ database:
 | 3 | Jishan | Live worker tracking (map + ETA) + SOS emergency dispatch (3km radius) | ✅ Built (rebuilt on real data — the original had drifted into a self-contained demo with hardcoded coordinates and a client-only simulated GPS sender, disconnected from the real `Booking`/`Worker` flow; this replaces it end to end) | Real GPS via the browser's Geolocation API (free, no key) — `components/tracking/WorkerLocationShare.tsx` (booking-scoped, `location:update`) and `components/tracking/WorkerOnlinePanel.tsx` (standalone "go online", `worker:location`), both over the existing Socket.IO connection (`server.ts`). Range is a real Haversine query (`lib/geo.ts`) over online/available/verified `Worker` rows with a fresh `locationUpdatedAt` — see `app/api/sos/route.ts`. Accepting an SOS (`app/api/sos/[id]/accept`, race-safe via a conditional `updateMany`) creates a real `Booking` (CONFIRMED, real arrival code), so it's the same live map and arrival-code gate as any other booking from there — `components/tracking/LiveTrackingMap.tsx` on both `app/bookings/[id]` and the worker's job list. Customer trigger: `app/sos`, `components/sos/SosTrigger.tsx`. Models: `Worker.isOnline`/`currentLat`/`currentLng`/`locationUpdatedAt`, `SosRequest.bookingId`, `Booking` (the removed `WorkerLocation` demo table is gone). SMS is mocked by team decision, not a gap (see stack table) |
 | 4 | Sudiptha | Multi-address family portal + digital scope-lock engine — in concrete terms: real booking requests, bargaining, and an arrival-code gate on the customer's phone/address | ✅ **Built** (scope-lock/bargaining half) — see the booking-flow section above. 🔴 **Not built**: the multi-address/family-portal half — multiple saved properties, caretaker invites. `User.address` is a single field, not a list | `app/api/bookings/**`, `app/bookings/[id]`, `app/dashboard/worker-job` (`WorkerJobsList.tsx`), `components/booking/*`, `lib/booking/*` |
 
-## Module 2: Trust, Quality & AI Analytics — 🔴 none built yet
+## Module 2: Trust, Quality & AI Analytics — 🟡 partially started
 
-No matching Prisma models exist for any of these (`Review`, `PhotoProof`, `Dispute`,
-`WorkerAnalytics` are all absent from schema).
+`Review`, `PhotoProof`, `Dispute`, `WorkerAnalytics` are all still absent from schema —
+none of the other three features below have any matching models yet.
 
-| F | Owner | Feature |
-|---|---|---|
-| 1 | Shiva | AI TrustScore engine (6-metric reliability score) + review fraud detector (Groq, not OpenAI). Reviews restricted to verified completions within 72h |
-| 2 | Adri | PhotoProof job documentation (timestamped/GPS-tagged before/after photos, needs file storage) + neighborhood demand heatmap for workers |
-| 3 | Jishan | Dispute resolution + escrow settlement (needs a payment gateway). Now has something real to attach to — `Booking.status` reaches `COMPLETED` for real |
-| 4 | Sudiptha | Worker income intelligence dashboard + AI predictive planner (Groq). Now has real `agreedRateBdt`/`COMPLETED` bookings to aggregate |
+| F | Owner | Feature | Status | Files |
+|---|---|---|---|---|
+| 1 | Shiva | AI TrustScore engine (6-metric reliability score) + review fraud detector (Groq, not OpenAI). Reviews restricted to verified completions within 72h | 🔴 Not built | — |
+| 2 | Adri | Neighborhood demand heatmap for workers. (PDF also listed PhotoProof job documentation here — **decided not to build it, by Adri's own call, not a TODO**) | ✅ Built (heatmap) | Worker-only `/dashboard/opportunities` (redirects everyone else). `lib/opportunities/demandScoreMath.ts` (pure, unit-tested) scores each of the 22 Dhaka areas by real demand (open `JobRequest`s, recent `Booking`/`SosRequest`s bucketed to their nearest neighborhood centroid, zero-result area-filtered `SearchLog` rows) ÷ available `Worker` supply — no fabricated numbers. `lib/opportunities/demandScore.ts` runs the actual queries. Two free APIs, each doing a distinct job: Groq (`lib/ai/groqClient.ts`'s `summarizeOpportunitiesWithGroq`, same key as Feature 2 of Module 1) turns the scores into one actionable sentence with a deterministic fallback if it's unavailable; Open-Meteo (`lib/weather/openMeteo.ts`, no key required at all) supplies real current Dhaka weather as its own context card — deliberately *not* folded into the score formula, since there's no real data backing a weather→demand correlation for this app. `components/opportunities/*` (interactive Leaflet bubble map + ranked table, click either to sync selection, "Browse jobs here" deep-links into the existing job-requests apply flow via `?area=`) |
+| 3 | Jishan | Dispute resolution + escrow settlement (needs a payment gateway). Now has something real to attach to — `Booking.status` reaches `COMPLETED` for real | 🔴 Not built | — |
+| 4 | Sudiptha | Worker income intelligence dashboard + AI predictive planner (Groq). Now has real `agreedRateBdt`/`COMPLETED` bookings to aggregate | 🔴 Not built | — |
 
 ## Module 3: Marketplace Monetization, Communication & Automated Ops — 🔴 none built yet
 

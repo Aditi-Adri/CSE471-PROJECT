@@ -221,9 +221,18 @@ model SearchLog {
   resultCount        Int
   durationMs         Int
   createdAt          DateTime    @default(now())
+  /// The area filter applied, if any — nullable because most historical
+  /// rows predate this column and plenty of searches don't filter by
+  /// area at all. Feeds the neighborhood demand heatmap (Module 2,
+  /// Feature 2): a zero-result search filtered to a specific area is a
+  /// soft "nobody here matched" signal, same idea as JobRequest but
+  /// automatic instead of requiring the customer to post anything. See
+  /// lib/opportunities/demandScore.ts.
+  area               DhakaArea?
 
   @@index([createdAt])
   @@index([detectedCategoryId])
+  @@index([area])
 }
 
 /// Tracks customer bookings and en-route technician status
