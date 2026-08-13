@@ -2,17 +2,31 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { UserMenu } from "@/components/auth/UserMenu";
 import { Logo } from "./Logo";
 
 const NAV_LINKS = [
   { href: "/#how-it-works", label: "How it works" },
   { href: "/#categories", label: "Categories" },
-  { href: "/#trust", label: "Trust & safety" },
+  { href: "/#safety", label: "Safety" },
+  { href: "/#trust", label: "Trust & verification" },
 ];
 
 export function SiteHeader() {
   const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Route changes (including same-page hash links) close the menu —
+  // otherwise it stays open covering the section you just navigated to.
+  // Adjusted during render (React's recommended pattern for "reset state
+  // when a prop changes") rather than in an effect, which would cause an
+  // extra render pass and a visible flash of the still-open menu first.
+  const [lastPathname, setLastPathname] = useState(pathname);
+  if (pathname !== lastPathname) {
+    setLastPathname(pathname);
+    setMobileOpen(false);
+  }
 
   return (
     <header className="sticky top-0 z-40 border-b border-zinc-200/80 bg-white/80 backdrop-blur-md dark:border-zinc-800/80 dark:bg-zinc-950/80">
@@ -33,7 +47,7 @@ export function SiteHeader() {
           ))}
         </nav>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <Link
             href="/search"
             className={`hidden items-center justify-center rounded-full px-4 py-2 text-sm font-medium transition sm:inline-flex ${
@@ -45,8 +59,51 @@ export function SiteHeader() {
             Find a technician
           </Link>
           <UserMenu />
+
+          <button
+            type="button"
+            onClick={() => setMobileOpen((v) => !v)}
+            aria-expanded={mobileOpen}
+            aria-label={mobileOpen ? "Close menu" : "Open menu"}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-200 text-zinc-600 transition hover:bg-zinc-50 md:hidden dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            {mobileOpen ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="m6 6 12 12M18 6 6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            )}
+          </button>
         </div>
       </div>
+
+      {mobileOpen && (
+        <nav className="border-t border-zinc-200 bg-white px-4 py-3 md:hidden dark:border-zinc-800 dark:bg-zinc-950">
+          <ul className="flex flex-col">
+            {NAV_LINKS.map((link) => (
+              <li key={link.href}>
+                <Link
+                  href={link.href}
+                  className="block rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                >
+                  {link.label}
+                </Link>
+              </li>
+            ))}
+            <li>
+              <Link
+                href="/search"
+                className="mt-1 block rounded-lg bg-brand-600 px-3 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-brand-700"
+              >
+                Find a technician
+              </Link>
+            </li>
+          </ul>
+        </nav>
+      )}
     </header>
   );
 }

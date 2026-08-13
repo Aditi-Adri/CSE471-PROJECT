@@ -11,7 +11,10 @@ import { optionalPhoneSchema } from "./phone";
 export const PUBLIC_ROLES = ["CUSTOMER", "WORKER", "CORPORATE"] as const;
 export type PublicRole = (typeof PUBLIC_ROLES)[number];
 
-const passwordSchema = z
+// Exported so any flow that collects a new password (registration,
+// reset, and the dashboard's change-password form) enforces the exact
+// same rule instead of three schemas quietly drifting apart.
+export const passwordSchema = z
   .string()
   .min(8, "Password must be at least 8 characters.")
   // bcrypt silently ignores bytes beyond 72 — cap input so what the

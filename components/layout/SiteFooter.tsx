@@ -26,6 +26,7 @@ export function SiteFooter() {
           title="Trust & safety"
           links={[
             { href: "/#trust", label: "Verification tiers" },
+            { href: "/#safety", label: "Live tracking & SOS" },
             { href: "/search", label: "Filter by verified pros" },
           ]}
         />

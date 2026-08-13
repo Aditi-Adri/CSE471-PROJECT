@@ -90,6 +90,11 @@ model User {
   emailVerified DateTime?
   image         String?
   phone         String?   @unique
+  /// Customer's saved home/service address — set from the dashboard
+  /// (see app/api/account/profile). Surfaced to the assigned worker
+  /// only after a booking is confirmed (arrival-code match), never
+  /// before — see docs/FEATURE_SPEC.md's booking-flow section.
+  address       String?
   passwordHash  String?
   role          Role      @default(CUSTOMER)
 

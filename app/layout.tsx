@@ -15,13 +15,39 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const SITE_URL = process.env.NEXTAUTH_URL || "http://localhost:3000";
+const SITE_TITLE = "HireLocal — Verified local technicians, matched instantly";
+const SITE_DESCRIPTION =
+  "Describe your problem in plain text and get matched to a background-checked, verified local technician in Dhaka — live tracking, one-tap SOS, and fair upfront pricing.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
-    default: "HireLocal — Verified local technicians, matched instantly",
+    default: SITE_TITLE,
     template: "%s — HireLocal",
   },
-  description:
-    "Describe your problem in plain text and get matched to a background-checked, verified local technician in minutes.",
+  description: SITE_DESCRIPTION,
+  keywords: [
+    "local technician Dhaka",
+    "verified electrician",
+    "verified plumber",
+    "home repair service",
+    "background-checked technician",
+    "on-demand handyman",
+  ],
+  openGraph: {
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    url: SITE_URL,
+    siteName: "HireLocal",
+    type: "website",
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
