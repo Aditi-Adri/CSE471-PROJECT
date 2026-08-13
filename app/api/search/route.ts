@@ -195,6 +195,7 @@ export async function GET(request: Request) {
           matchConfidence,
           resultCount: total,
           durationMs,
+          area: (filters.area as DhakaArea | undefined) ?? null,
         },
       })
       .catch((err) => console.error("Failed to write SearchLog:", err));
