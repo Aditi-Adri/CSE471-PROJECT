@@ -110,6 +110,8 @@ model User {
   accounts            Account[]
   sessions            Session[]
   passwordResetTokens PasswordResetToken[]
+  /// Orders placed in the Spare Parts Store
+  orders              Order[]
 
   /// Coordinator (Admin) actions on other workers' verification
   /// submissions — see the Worker Verification models below.
@@ -478,4 +480,63 @@ model WorkerReference {
   note         String?
 
   @@index([tier3Id])
+}
+
+// =====================================================================
+// FEATURE: Spare Parts Store — Items, Orders, Order History (New)
+// Tables for technician/worker spare parts marketplace with inventory,
+// cart, and purchase history.
+// =====================================================================
+
+/// Spare parts catalog — all available items usable across work types
+/// with real-time stock tracking.
+model Item {
+  id          Int     @id @default(autoincrement())
+  name        String  /// Item name, e.g. "Water Pump", "Electrical Wire"
+  pictureUrl  String? /// URL to item image
+  useCase     String  /// Description of what the item is used for
+  price       Decimal @db.Decimal(10, 2) /// Final sell price with markup
+  stockQty    Int     @default(0) /// Current available units in inventory
+  workType    String? /// Optional filter hint (e.g. "Plumbing", "Electrical")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orderItems OrderItem[]
+
+  @@index([workType])
+  @@index([stockQty])
+}
+
+/// Purchase orders created when a technician confirms payment in the shop
+model Order {
+  id          Int     @id @default(autoincrement())
+  workerId    String  /// Foreign key to User.id (technician/worker making the purchase)
+  worker      User    @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  jobId       String? /// Optional foreign key to Booking.id (if order is tied to a specific job)
+  totalAmount Decimal @db.Decimal(10, 2) /// Sum of all items + quantities in this order
+  createdAt   DateTime @default(now())
+
+  items OrderItem[]
+
+  @@index([workerId])
+  @@index([jobId])
+  @@index([createdAt])
+}
+
+/// Line items for each order — one row per item purchased, storing
+/// snapshot data (name, price at time of purchase) so order history
+/// stays correct even if items are renamed/repriced later
+model OrderItem {
+  id        Int     @id @default(autoincrement())
+  orderId   Int
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  itemId    Int
+  item      Item    @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  itemName  String  /// Snapshot of item name at purchase time
+  quantity  Int     /// Units purchased
+  unitPrice Decimal @db.Decimal(10, 2) /// Snapshot of price per unit at purchase time
+  subtotal  Decimal @db.Decimal(10, 2) /// quantity * unitPrice
+
+  @@index([orderId])
+  @@index([itemId])
 }

@@ -11,6 +11,8 @@ const NAV_LINKS = [
   { href: "/#categories", label: "Categories" },
   { href: "/#safety", label: "Safety" },
   { href: "/#trust", label: "Trust & verification" },
+  // FEATURE: Spare Parts Shop navigation link
+  { href: "/shop", label: "Spare Parts Shop" },
 ];
 
 export function SiteHeader() {

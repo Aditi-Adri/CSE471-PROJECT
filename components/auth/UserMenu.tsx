@@ -69,13 +69,23 @@ export function UserMenu() {
             Dashboard
           </Link>
           {session.user.role === "WORKER" && (
-            <Link
-              href="/dashboard/verification"
-              onClick={() => setOpen(false)}
-              className="block px-4 py-2 text-sm text-zinc-700 transition hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            >
-              Get verified
-            </Link>
+            <>
+              {/* NEW FEATURE: Spare Parts Store link for workers */}
+              <Link
+                href="/shop"
+                onClick={() => setOpen(false)}
+                className="block px-4 py-2 text-sm text-zinc-700 transition hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                Shop
+              </Link>
+              <Link
+                href="/dashboard/verification"
+                onClick={() => setOpen(false)}
+                className="block px-4 py-2 text-sm text-zinc-700 transition hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                Get verified
+              </Link>
+            </>
           )}
           {session.user.role === "ADMIN" && (
             <Link
