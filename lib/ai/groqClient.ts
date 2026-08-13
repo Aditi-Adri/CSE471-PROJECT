@@ -99,3 +99,61 @@ export async function classifyWithGroq(
     clearTimeout(timer);
   }
 }
+
+/**
+ * Second use of the same free Groq call, this time plain-text
+ * summarization rather than classification — turns the neighborhood
+ * demand heatmap's raw per-area numbers (lib/opportunities/
+ * demandScore.ts) into one short, actionable sentence for a worker.
+ * Same never-throws-returns-null-on-any-failure contract as
+ * classifyWithGroq — see lib/opportunities/opportunityInsight.ts for
+ * the deterministic fallback that takes over when this returns null.
+ */
+export async function summarizeOpportunitiesWithGroq(
+  prompt: string,
+  opts: { apiKey: string; model?: string; timeoutMs?: number }
+): Promise<string | null> {
+  const { apiKey, model = DEFAULT_MODEL, timeoutMs = DEFAULT_TIMEOUT_MS } = opts;
+  if (!apiKey) return null;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.4,
+        max_tokens: 120,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a terse local-services market analyst for Dhaka. Given " +
+              "neighborhood-level worker supply/demand numbers, write ONE short " +
+              "sentence (max ~30 words) telling a technician where to focus " +
+              "today and why, using the actual area names and numbers given. " +
+              "No greeting, no markdown, plain text only.",
+          },
+          { role: "user", content: prompt },
+        ],
+      }),
+    });
+
+    if (!response.ok) return null;
+
+    const payload = await response.json();
+    const text: string | undefined = payload?.choices?.[0]?.message?.content;
+    return text?.trim() || null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
