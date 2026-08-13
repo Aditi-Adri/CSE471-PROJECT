@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   ClipboardCheckIcon,
   IdCardIcon,
+  MessageIcon,
   ShieldCheckIcon,
   SirenIcon,
   WrenchIcon,
@@ -33,6 +34,12 @@ function getQuickLinks(role: Role, hasWorkerProfile: boolean): QuickLink[] {
           title: "Find a technician",
           description: "Search verified local workers by service, area, or budget.",
           icon: SearchIcon,
+        },
+        {
+          href: "/dashboard/my-requests",
+          title: "My requests",
+          description: "Jobs you posted that didn't match a regular category — review applicants and hire one.",
+          icon: MessageIcon,
         },
         {
           href: "/bookings",
@@ -71,6 +78,12 @@ function getQuickLinks(role: Role, hasWorkerProfile: boolean): QuickLink[] {
           title: "Jobs & earnings",
           description: "See your active job summary and base pricing.",
           icon: WrenchIcon,
+        },
+        {
+          href: "/dashboard/my-applications",
+          title: "My applications",
+          description: "See which open requests you've applied to, and whether you got hired.",
+          icon: MessageIcon,
         },
       ];
 

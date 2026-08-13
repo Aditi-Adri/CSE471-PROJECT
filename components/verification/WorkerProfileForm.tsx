@@ -26,6 +26,8 @@ export function WorkerProfileForm() {
   const [hourlyRateMaxBdt, setHourlyRateMaxBdt] = useState(800);
   const [yearsExperience, setYearsExperience] = useState(1);
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
+  const [showCustomCategory, setShowCustomCategory] = useState(false);
+  const [customCategoryName, setCustomCategoryName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -61,6 +63,7 @@ export function WorkerProfileForm() {
         hourlyRateMaxBdt,
         yearsExperience,
         categoryIds,
+        customCategoryName: customCategoryName.trim() || undefined,
       }),
     });
     const data = await response.json();
@@ -130,7 +133,31 @@ export function WorkerProfileForm() {
                 </button>
               );
             })}
+            {/* Don't do this trade? Add it — resolved server-side into a
+                real ServiceCategory (reusing one by name if it already
+                exists) rather than a free-text tag nobody else sees. */}
+            <button
+              type="button"
+              onClick={() => setShowCustomCategory((v) => !v)}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition ${
+                showCustomCategory
+                  ? "border-brand-600 bg-brand-50 text-brand-700 dark:border-brand-500 dark:bg-brand-950 dark:text-brand-300"
+                  : "border-dashed border-zinc-300 text-zinc-600 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-400"
+              }`}
+            >
+              🆕 Other
+            </button>
           </div>
+
+          {showCustomCategory && (
+            <input
+              value={customCategoryName}
+              onChange={(e) => setCustomCategoryName(e.target.value)}
+              className={`${inputClasses} mt-1`}
+              placeholder='e.g. "Drone Repair" — not one of our usual categories yet'
+              maxLength={50}
+            />
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -197,7 +224,7 @@ export function WorkerProfileForm() {
 
         <button
           type="submit"
-          disabled={isSubmitting || categoryIds.length === 0}
+          disabled={isSubmitting || (categoryIds.length === 0 && !customCategoryName.trim())}
           className={primaryButtonClasses}
         >
           {isSubmitting ? "Creating profile…" : "Create profile & continue to verification"}

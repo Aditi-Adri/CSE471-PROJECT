@@ -37,7 +37,9 @@ model User {
   /// before — see docs/FEATURE_SPEC.md's booking-flow section.
   address             String?
   accounts            Account[]
-  JobRequest          JobRequest[]
+  /// Requests this user posted when a search came up with no matching
+  /// category — see JobRequest below.
+  jobRequests         JobRequest[]
   passwordResetTokens PasswordResetToken[]
   sessions            Session[]
   tier1Reviews        Tier1Verification[]    @relation("Tier1Reviewer")
@@ -126,23 +128,23 @@ model ServiceCategory {
 }
 
 model Worker {
-  id                   String                @id @default(cuid())
-  userId               String                @unique
-  headline             String
-  bio                  String
-  area                 DhakaArea
-  addressDetail        String
-  hourlyRateMinBdt     Int
-  hourlyRateMaxBdt     Int
-  verificationTier     VerificationTier      @default(UNVERIFIED)
-  yearsExperience      Int                   @default(0)
-  isAvailableNow       Boolean               @default(true)
-  ratingAvg            Float                 @default(0)
-  ratingCount          Int                   @default(0)
-  completedJobs        Int                   @default(0)
-  avatarSeed           String
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
+  id                     String                  @id @default(cuid())
+  userId                 String                  @unique
+  headline               String
+  bio                    String
+  area                   DhakaArea
+  addressDetail          String
+  hourlyRateMinBdt       Int
+  hourlyRateMaxBdt       Int
+  verificationTier       VerificationTier        @default(UNVERIFIED)
+  yearsExperience        Int                     @default(0)
+  isAvailableNow         Boolean                 @default(true)
+  ratingAvg              Float                   @default(0)
+  ratingCount            Int                     @default(0)
+  completedJobs          Int                     @default(0)
+  avatarSeed             String
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
   /// =====================================================================
   /// MODULE 1 -> FEATURE 3 (Jishan): Live Worker Tracking & SOS Emergency
   /// Dispatch.
@@ -156,17 +158,21 @@ model Worker {
   /// background job. See lib/geo.ts for the Haversine range check and
   /// app/api/sos/route.ts for how this feeds the 3km SOS broadcast.
   /// =====================================================================
-  isOnline             Boolean               @default(false)
-  currentLat           Float?
-  currentLng           Float?
-  locationUpdatedAt    DateTime?
-  availability         AvailabilitySlot[]
-  JobRequest           JobRequest[]
-  tier1Verification    Tier1Verification?
-  tier2SkillTest       Tier2SkillTest?
-  tier3PoliceClearance Tier3PoliceClearance?
-  user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  categories           WorkerCategory[]
+  isOnline               Boolean                 @default(false)
+  currentLat             Float?
+  currentLng             Float?
+  locationUpdatedAt      DateTime?
+  availability           AvailabilitySlot[]
+  /// Open requests this worker has been hired for, and every request
+  /// they've applied to (hired or not) — see JobRequest/
+  /// JobRequestApplication below.
+  hiredJobRequests       JobRequest[]            @relation("HiredForJobRequest")
+  jobRequestApplications JobRequestApplication[]
+  tier1Verification      Tier1Verification?
+  tier2SkillTest         Tier2SkillTest?
+  tier3PoliceClearance   Tier3PoliceClearance?
+  user                   User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categories             WorkerCategory[]
 
   @@index([area])
   @@index([verificationTier])
@@ -368,22 +374,53 @@ model WorkerReference {
   @@index([tier3Id])
 }
 
-model JobRequest {
-  id           String           @id
-  customerId   String
-  description  String
-  area         DhakaArea
-  budgetMinBdt Int?
-  budgetMaxBdt Int?
-  status       JobRequestStatus @default(OPEN)
-  claimedById  String?
-  claimedAt    DateTime?
-  createdAt    DateTime         @default(now())
-  Worker       Worker?          @relation(fields: [claimedById], references: [id])
-  User         User             @relation(fields: [customerId], references: [id], onDelete: Cascade)
+// =====================================================================
+// OPEN JOB REQUESTS (Adri) — not one of the PDF's numbered features;
+// closes a gap the team found while building the real search/booking
+// flow (see docs/FEATURE_SPEC.md, "Core discovery & booking flow",
+// steps 7-8): today a search that matches no category just silently
+// shows every worker. This lets the customer post what they actually
+// need instead, and lets any number of interested workers apply — the
+// customer then picks exactly one, same shape as a real job posting.
+// =====================================================================
 
-  @@index([area])
+model JobRequest {
+  id            String           @id @default(cuid())
+  customerId    String
+  customer      User             @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  description   String
+  area          DhakaArea
+  budgetMinBdt  Int?
+  budgetMaxBdt  Int?
+  status        JobRequestStatus @default(OPEN)
+  hiredWorkerId String?
+  hiredWorker   Worker?          @relation("HiredForJobRequest", fields: [hiredWorkerId], references: [id], onDelete: SetNull)
+  hiredAt       DateTime?
+  createdAt     DateTime         @default(now())
+
+  applications JobRequestApplication[]
+
   @@index([status])
+  @@index([area])
+}
+
+/// A worker expressing interest in an OPEN request. Any number of
+/// workers can apply to the same one; the customer reviews applicants
+/// and hires exactly one via POST .../hire, which sets
+/// JobRequest.hiredWorkerId and flips status to HIRED. Application
+/// rows aren't deleted when that happens — "who else applied" stays
+/// visible, it's just no longer actionable once the job is HIRED.
+model JobRequestApplication {
+  id           String     @id @default(cuid())
+  jobRequestId String
+  jobRequest   JobRequest @relation(fields: [jobRequestId], references: [id], onDelete: Cascade)
+  workerId     String
+  worker       Worker     @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  appliedAt    DateTime   @default(now())
+
+  @@unique([jobRequestId, workerId])
+  @@index([jobRequestId])
+  @@index([workerId])
 }
 
 enum Role {
@@ -483,5 +520,5 @@ enum TierReviewStatus {
 
 enum JobRequestStatus {
   OPEN
-  CLAIMED
+  HIRED
 }
