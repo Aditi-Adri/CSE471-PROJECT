@@ -113,9 +113,13 @@ model User {
 
   /// Coordinator (Admin) actions on other workers' verification
   /// submissions — see the Worker Verification models below.
-  tier1Reviews     Tier1Verification[]     @relation("Tier1Reviewer")
-  tier2Evaluations Tier2SkillTest[]        @relation("Tier2Evaluator")
-  tier3Reviews     Tier3PoliceClearance[]  @relation("Tier3Reviewer")
+  tier1Reviews     Tier1Verification[]    @relation("Tier1Reviewer")
+  tier2Evaluations Tier2SkillTest[]       @relation("Tier2Evaluator")
+  tier3Reviews     Tier3PoliceClearance[] @relation("Tier3Reviewer")
+
+  /// Requests this user posted when a search came up with no matching
+  /// category — see JobRequest below.
+  jobRequests JobRequest[]
 
   @@index([role])
 }
@@ -228,6 +232,9 @@ model Worker {
   tier2SkillTest       Tier2SkillTest?
   tier3PoliceClearance Tier3PoliceClearance?
 
+  /// Open requests this worker has claimed — see JobRequest below.
+  claimedJobRequests JobRequest[]
+
   @@index([area])
   @@index([verificationTier])
   @@index([isAvailableNow])
@@ -278,6 +285,39 @@ model SearchLog {
   @@index([createdAt])
   @@index([detectedCategoryId])
 }
+
+// =====================================================================
+// OPEN JOB REQUESTS (Adri) — not one of the PDF's numbered features;
+// closes a gap the team found while building the real search/booking
+// flow (see docs/FEATURE_SPEC.md, "Core discovery & booking flow",
+// steps 7-8): today a search that matches no category just silently
+// shows every worker. This lets the customer post what they actually
+// need instead, and lets a worker browse unclaimed requests.
+// =====================================================================
+
+enum JobRequestStatus {
+  OPEN
+  CLAIMED
+}
+
+model JobRequest {
+  id           String           @id @default(cuid())
+  customerId   String
+  customer     User             @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  description  String
+  area         DhakaArea
+  budgetMinBdt Int?
+  budgetMaxBdt Int?
+  status       JobRequestStatus @default(OPEN)
+  claimedById  String?
+  claimedBy    Worker?          @relation(fields: [claimedById], references: [id], onDelete: SetNull)
+  claimedAt    DateTime?
+  createdAt    DateTime         @default(now())
+
+  @@index([status])
+  @@index([area])
+}
+
 // =====================================================================
 // LIVE TRACKING & SOS FEATURE MODELS (Jishan)
 // =====================================================================

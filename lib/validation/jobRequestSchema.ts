@@ -1,0 +1,29 @@
+import { z } from "zod";
+import { DHAKA_AREAS } from "@/lib/constants/dhakaAreas";
+
+const areaValues = DHAKA_AREAS.map((a) => a.value) as [string, ...string[]];
+
+/** POST /api/job-requests — a customer posting what they need. */
+export const createJobRequestSchema = z
+  .object({
+    description: z.string().trim().min(10, "Describe what you need in a bit more detail.").max(500),
+    area: z.enum(areaValues),
+    budgetMinBdt: z.number().int().min(0).max(1_000_000).optional(),
+    budgetMaxBdt: z.number().int().min(0).max(1_000_000).optional(),
+  })
+  .refine(
+    (data) =>
+      data.budgetMinBdt === undefined ||
+      data.budgetMaxBdt === undefined ||
+      data.budgetMinBdt <= data.budgetMaxBdt,
+    { message: "Minimum budget can't be higher than maximum budget.", path: ["budgetMinBdt"] }
+  );
+
+export type CreateJobRequestInput = z.infer<typeof createJobRequestSchema>;
+
+/** GET /api/job-requests — a worker browsing the open list, filterable by area. */
+export const listJobRequestsSchema = z.object({
+  area: z.enum(areaValues).optional(),
+});
+
+export type ListJobRequestsInput = z.infer<typeof listJobRequestsSchema>;
