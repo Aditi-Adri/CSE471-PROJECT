@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-// Remove: import AppHeader from "@/components/tracking/AppHeader";
+import { trackingPageBackground } from "@/lib/ui/trackingTheme";
 
 type DemoWorker = {
   workerId: string;
@@ -17,6 +17,7 @@ export default function TrackDemoHome() {
   const [selectedWorkerId, setSelectedWorkerId] = useState("");
   const [loading, setLoading] = useState(false);
   const [fetchingWorkers, setFetchingWorkers] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/tracking/workers")
@@ -34,6 +35,7 @@ export default function TrackDemoHome() {
   const handleStartTracking = async () => {
     if (!selectedWorkerId) return;
     setLoading(true);
+    setErrorMessage(null);
 
     try {
       const res = await fetch("/api/tracking/booking/assign", {
@@ -47,20 +49,18 @@ export default function TrackDemoHome() {
       if (res.ok && data.bookingId) {
         router.push(`/track/${data.bookingId}`);
       } else {
-        alert(data.error || "Failed to assign worker.");
+        setErrorMessage(data.error || "Failed to assign worker.");
       }
     } catch (err) {
       console.error("Assignment error:", err);
-      alert("Network error. Please check your console.");
+      setErrorMessage("Network error. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "transparent", paddingTop: "40px" }}>
-      {/* AppHeader removed from here */}
-
+    <div style={{ ...trackingPageBackground, minHeight: "100vh", paddingTop: "40px" }}>
       <main style={{ maxWidth: 440, margin: "0 auto", padding: "0 16px" }}>
         <div
           style={{
@@ -133,6 +133,10 @@ export default function TrackDemoHome() {
           >
             {loading ? "Assigning..." : "Start Live Tracking"}
           </button>
+
+          {errorMessage && (
+            <p style={{ marginTop: 12, fontSize: 13, color: "#fca5a5", lineHeight: 1.5 }}>{errorMessage}</p>
+          )}
         </div>
       </main>
     </div>

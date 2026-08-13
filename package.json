@@ -36,7 +36,6 @@
     "resend": "^6.18.1",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
-    "twilio": "^5.4.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

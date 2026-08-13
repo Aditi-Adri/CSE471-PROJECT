@@ -19,6 +19,12 @@ import { withAuth } from "next-auth/middleware";
  * sensible response instead — the /admin page component itself
  * (redirects home) and every /api/admin/* route (requireAdminSession,
  * returns 403) — both already enforce it independently of this file.
+ *
+ * /track, /sos, and /worker/dashboard are the Live Tracking & SOS
+ * feature's manual test harnesses (worker/booking pickers, no real
+ * ownership check of who's watching what) — matched here for the same
+ * reason as the rest: anonymous drive-by access to live location data
+ * isn't something this app wants, even for a demo page.
  */
 export default withAuth({
   pages: {
@@ -27,5 +33,13 @@ export default withAuth({
 });
 
 export const config = {
-  matcher: ["/account/:path*", "/complete-profile", "/dashboard/:path*", "/admin/:path*"],
+  matcher: [
+    "/account/:path*",
+    "/complete-profile",
+    "/dashboard/:path*",
+    "/admin/:path*",
+    "/track/:path*",
+    "/sos/:path*",
+    "/worker/dashboard",
+  ],
 };

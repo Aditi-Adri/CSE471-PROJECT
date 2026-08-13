@@ -1,23 +1,29 @@
-import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth/authOptions";
 import { prisma } from "@/lib/db";
 import { relativeKm } from "@/lib/geo";
+import { withErrorHandling } from "@/lib/api/withErrorHandling";
 
 /**
  * GET /api/tracking/sos/[sosId]
  *
  * Returns the SOS request's current state, shaped to match the
- * "sos:accepted" socket payload emitted by the accept route.
+ * "sos:accepted" socket payload emitted by the accept route. Requires
+ * a signed-in session — this exposed a customer's live coordinates to
+ * anyone who knew (or guessed) the sosId, no auth at all.
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ sosId: string }> }
-) {
-  const { sosId } = await params;
+export const GET = withErrorHandling(
+  async (request: Request, { params }: { params: Promise<{ sosId: string }> }) => {
+    const { sosId } = await params;
 
-  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return Response.json({ error: "You must be signed in." }, { status: 401 });
+    }
+
     const sos = await prisma.sosRequest.findUnique({ where: { id: sosId } });
     if (!sos) {
-      return NextResponse.json({ error: "SOS request not found" }, { status: 404 });
+      return Response.json({ error: "SOS request not found" }, { status: 404 });
     }
 
     // Workers who were alerted, plotted on the radar relative to the customer.
@@ -32,11 +38,11 @@ export async function GET(
       const worker = await prisma.workerLocation.findUnique({
         where: { workerId: sos.acceptedWorkerId },
       });
-      
+
       accepted = {
         sosId: sos.id,
         workerId: sos.acceptedWorkerId,
-        etaMinutes: sos.etaMinutes, // Updated field name here
+        etaMinutes: sos.etaMinutes,
         worker: worker
           ? {
               name: worker.name,
@@ -49,7 +55,7 @@ export async function GET(
       };
     }
 
-    return NextResponse.json({
+    return Response.json({
       sosId: sos.id,
       status: sos.status,
       radiusKm: sos.radiusKm,
@@ -63,11 +69,5 @@ export async function GET(
       accepted,
       createdAt: sos.createdAt,
     });
-  } catch (error) {
-    console.error("Error fetching SOS request:", error);
-    return NextResponse.json(
-      { error: (error as Error).message || "Internal server error" },
-      { status: 500 }
-    );
   }
-}
+);
