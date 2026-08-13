@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/authOptions";
 import { prisma } from "@/lib/db";
 import { WorkerDashboard } from "@/components/worker/WorkerDashboard";
+import { WorkerJobsList } from "@/components/booking/WorkerJobsList";
 
 export const metadata: Metadata = { title: "Worker dashboard" };
 
@@ -26,8 +27,13 @@ export default async function WorkerJobDashboardPage() {
   if (!worker) redirect("/dashboard/worker-profile");
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8">
       <WorkerDashboard worker={worker} />
+
+      <section>
+        <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-50">Booking requests</h2>
+        <WorkerJobsList />
+      </section>
     </div>
   );
 }

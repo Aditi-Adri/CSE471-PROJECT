@@ -284,7 +284,17 @@ model SearchLog {
 
 enum BookingStatus {
   PENDING
+  /// Customer requested this worker at a proposed rate; worker hasn't
+  /// responded yet. Module 1 F4 (Sudiptha).
+  PENDING_ACCEPTANCE
+  /// Worker accepted (at the proposed or countered rate) — the arrival
+  /// code is live, address/phone are still withheld until it's verified.
+  CONFIRMED
+  /// Worker declined the request outright.
+  REJECTED
   IN_TRANSIT
+  /// Also reused as "arrival code verified" for the real booking flow —
+  /// see Booking.arrivalVerifiedAt.
   ARRIVED
   COMPLETED
   CANCELLED
@@ -325,6 +335,32 @@ model Booking {
   tenMinuteAlertSent Boolean       @default(false)
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
+
+  /// =====================================================================
+  /// MODULE 1 -> FEATURE 4 (Sudiptha): real booking request + rate
+  /// bargaining + arrival-code confirmation gate.
+  ///
+  /// `serviceAddress` is a snapshot of what the customer typed at
+  /// booking time (not a live join to User.address — they may be
+  /// booking for a different address than their saved default, and a
+  /// snapshot doesn't silently change if they edit their profile
+  /// later). Both stay null/hidden to the worker until
+  /// `arrivalVerifiedAt` is set — see app/api/bookings/[id]/route.ts.
+  /// =====================================================================
+  serviceAddress    String?
+  /// What the customer offered when requesting the booking.
+  proposedRateBdt   Int?
+  /// What the worker countered with, if they didn't just accept.
+  counterRateBdt    Int?
+  /// The rate both sides actually settled on (proposed or countered).
+  agreedRateBdt     Int?
+  /// Plaintext, short-lived, single-use, rate-limited on verification —
+  /// not a secret exchanged out-of-band, more a "this is genuinely the
+  /// accepted worker's own session confirming" checkpoint than a
+  /// cryptographic boundary. See docs/FEATURE_SPEC.md's booking-flow
+  /// notes for the full reasoning.
+  arrivalCode       String?
+  arrivalVerifiedAt DateTime?
 
   @@index([workerId])
   @@index([customerId])

@@ -6,7 +6,6 @@ import { calculateTotal, formatCurrency, generateOtp } from "@/lib/booking/booki
 type BookingConfirmWorker = {
   id: string;
   user: { name: string };
-  addressDetail: string;
   hourlyRateMinBdt: number;
   hourlyRateMaxBdt: number;
   categories: Array<{ category: { name: string }; isPrimary?: boolean }>;
@@ -17,7 +16,14 @@ type PendingVariation = {
   amount: number;
 };
 
-export function BookingConfirm({ worker }: { worker: BookingConfirmWorker }) {
+export function BookingConfirm({
+  worker,
+  customerAddress,
+}: {
+  worker: BookingConfirmWorker;
+  /** The customer's saved address — this is the technician's view, so it only renders once `arrivalVerified` is true. */
+  customerAddress: string;
+}) {
   const [otp, setOtp] = useState("");
   const [otpInput, setOtpInput] = useState("");
   const [arrivalVerified, setArrivalVerified] = useState(false);
@@ -82,6 +88,17 @@ export function BookingConfirm({ worker }: { worker: BookingConfirmWorker }) {
         </span>
       </div>
 
+      {/*
+        Prototype notice — deliberate, not a placeholder to delete. The
+        arrival code below is generated and checked entirely client-side
+        (both "sides" simulated in one browser tab) and nothing here is
+        persisted; see docs/FEATURE_SPEC.md's booking-flow section for
+        what turning this into a real two-party flow still needs.
+      */}
+      <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+        Preview only — the code below is simulated locally, not sent to your technician yet.
+      </p>
+
       <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Arrival verification</h3>
@@ -119,6 +136,42 @@ export function BookingConfirm({ worker }: { worker: BookingConfirmWorker }) {
             Confirm arrival
           </button>
         </div>
+      </section>
+
+      {/*
+        This card represents what the technician's app would show — the
+        customer's exact address is withheld until the arrival code
+        matches, both for the customer's safety (a wrong/unmatched code
+        never reveals where they live) and so the technician can't be
+        sent to the wrong door. See docs/FEATURE_SPEC.md's booking-flow
+        section, step 4, for what this still needs to be real (a
+        server-side code and an API that actually withholds the field —
+        today it's revealed by client-side state in this one preview).
+      */}
+      <section className="mt-4 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Customer address</h3>
+          {!arrivalVerified && (
+            <span className="text-xs text-zinc-500">Revealed after arrival code matches</span>
+          )}
+        </div>
+        {arrivalVerified ? (
+          customerAddress ? (
+            <p className="mt-3 text-sm text-zinc-700 dark:text-zinc-300">{customerAddress}</p>
+          ) : (
+            <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
+              This customer hasn&apos;t saved an address on their profile yet.
+            </p>
+          )
+        ) : (
+          <p className="mt-3 flex items-center gap-2 text-sm text-zinc-400 dark:text-zinc-600">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="5" y="10.5" width="14" height="9.5" rx="2" stroke="currentColor" strokeWidth="1.75" />
+              <path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+            </svg>
+            Hidden until arrival is verified
+          </p>
+        )}
       </section>
 
       <section className="mt-4 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
