@@ -19,6 +19,8 @@ function makeBooking(overrides: Partial<Booking> = {}): Booking {
     agreedRateBdt: 1200,
     arrivalCode: "4821",
     arrivalVerifiedAt: null,
+    respondedAt: null,
+    completedAt: null,
     createdAt: new Date("2026-01-01"),
     updatedAt: new Date("2026-01-01"),
     ...overrides,

@@ -32,6 +32,8 @@ export type WorkerResult = {
   ratingAvg: number;
   ratingCount: number;
   completedJobs: number;
+  /** MODULE 2 -> FEATURE 1 (Shiva): cached 0-100 composite reliability score. Null only very briefly right after Worker creation. */
+  trustScore: number | null;
   avatarSeed: string;
   categories: WorkerCategoryTag[];
 };

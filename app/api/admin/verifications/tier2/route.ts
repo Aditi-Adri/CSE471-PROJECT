@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireAdminSession } from "@/lib/verification/requireAdmin";
 import { tier2EvaluateSchema } from "@/lib/validation/verificationSchemas";
 import { syncWorkerVerificationTier } from "@/lib/verification/applyTierApproval";
+import { recomputeTrustScore } from "@/lib/trust/recomputeTrustScore";
 import { withErrorHandling } from "@/lib/api/withErrorHandling";
 
 /** POST /api/admin/verifications/tier2 — record a pass/fail decision for a practical skills test. */
@@ -39,6 +40,8 @@ export const POST = withErrorHandling(async (request: Request) => {
   if (decision === "APPROVED") {
     await syncWorkerVerificationTier(workerId);
   }
+  // MODULE 2 -> FEATURE 1 (Shiva): see the same call in tier1/route.ts.
+  await recomputeTrustScore(workerId);
 
   return Response.json({ status: decision });
 });

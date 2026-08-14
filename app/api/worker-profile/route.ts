@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth/authOptions";
 import { prisma } from "@/lib/db";
 import { createWorkerProfileSchema } from "@/lib/validation/workerProfileSchema";
 import { withErrorHandling } from "@/lib/api/withErrorHandling";
+import { recomputeTrustScore } from "@/lib/trust/recomputeTrustScore";
 import type { DhakaArea } from "@/app/generated/prisma/client";
 
 /** "Drone Repair" -> "drone-repair", falling back to "-2", "-3", ... on collision. */
@@ -125,6 +126,12 @@ export const POST = withErrorHandling(async (request: Request) => {
     },
     select: { id: true },
   });
+
+  // MODULE 2 -> FEATURE 1 (Shiva): every path that creates a Worker
+  // computes an initial trustScore right away — see the comment above
+  // Worker.trustScore in prisma/schema.prisma for why it's cached
+  // rather than left null until the first review comes in.
+  await recomputeTrustScore(worker.id);
 
   return Response.json({ worker }, { status: 201 });
 });

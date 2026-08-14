@@ -102,6 +102,12 @@ function getQuickLinks(role: Role, hasWorkerProfile: boolean): QuickLink[] {
           description: "Review pending Tier 1, 2, and 3 worker submissions.",
           icon: ClipboardCheckIcon,
         },
+        {
+          href: "/admin/reviews",
+          title: "Review moderation",
+          description: "Fraud-flagged customer reviews, surfaced for a human decision.",
+          icon: ShieldCheckIcon,
+        },
       ];
   }
 }

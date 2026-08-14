@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { formatCurrency } from "@/lib/booking/bookingFlow";
 import { cardClasses, errorBannerClasses, primaryButtonClasses, successBannerClasses } from "@/lib/ui/formStyles";
 import { LiveTrackingMap } from "@/components/tracking/LiveTrackingMap";
+import { ReviewForm } from "@/components/reviews/ReviewForm";
 
 type BookingDetail = {
   id: string;
@@ -165,7 +166,13 @@ export function BookingStatusView({ workerName, initial }: { workerName: string;
       )}
 
       {booking.status === "COMPLETED" && (
-        <p className={`mt-4 ${successBannerClasses}`}>Job marked complete. Thanks for using HireLocal.</p>
+        <>
+          <p className={`mt-4 ${successBannerClasses}`}>Job marked complete. Thanks for using HireLocal.</p>
+          {/* MODULE 2 -> FEATURE 1 (Shiva): review window is 72h from completion — the component itself asks the API whether it's still open. */}
+          <div className="mt-4">
+            <ReviewForm bookingId={booking.id} workerName={workerName} />
+          </div>
+        </>
       )}
     </div>
   );

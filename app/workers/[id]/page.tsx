@@ -7,6 +7,10 @@ import { VerificationBadge } from "@/components/search/VerificationBadge";
 import { RatingStars } from "@/components/search/RatingStars";
 import { AREA_LABEL_BY_VALUE } from "@/lib/constants/dhakaAreas";
 import { formatRateRange, pluralize } from "@/lib/format";
+import { TrustScoreBadge } from "@/components/trust/TrustScoreBadge";
+import { TrustScoreDetails } from "@/components/trust/TrustScoreDetails";
+import { ReviewList } from "@/components/reviews/ReviewList";
+import { getTrustBreakdown } from "@/lib/trust/recomputeTrustScore";
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -17,6 +21,15 @@ async function getWorker(id: string) {
       user: { select: { name: true } },
       categories: { include: { category: true } },
       availability: { orderBy: { dayOfWeek: "asc" } },
+      // MODULE 2 -> FEATURE 1 (Shiva): fraud-flagged reviews stay in
+      // this list (see components/reviews/ReviewList.tsx) — only
+      // isHidden: true (an admin's confirmed decision) drops one.
+      reviews: {
+        where: { isHidden: false },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        include: { customer: { select: { name: true } } },
+      },
     },
   });
 }
@@ -39,6 +52,7 @@ export default async function WorkerProfilePage({
   const { id } = await params;
   const worker = await getWorker(id);
   if (!worker) notFound();
+  const trustBreakdown = await getTrustBreakdown(worker.id);
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-10 sm:px-6 lg:px-8">
@@ -64,6 +78,7 @@ export default async function WorkerProfilePage({
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <VerificationBadge tier={worker.verificationTier} />
               <RatingStars ratingAvg={worker.ratingAvg} ratingCount={worker.ratingCount} />
+              <TrustScoreBadge score={worker.trustScore} compact />
             </div>
           </div>
         </div>
@@ -138,6 +153,15 @@ export default async function WorkerProfilePage({
           Direct booking, in-app chat and secure payment are launching soon — for now, use this
           profile to compare verified technicians before reaching out.
         </p>
+      </div>
+
+      {trustBreakdown && <TrustScoreDetails breakdown={trustBreakdown} />}
+
+      <div className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+        <h2 className="mb-4 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+          Reviews {worker.reviews.length > 0 && `(${worker.reviews.length})`}
+        </h2>
+        <ReviewList reviews={worker.reviews} />
       </div>
     </div>
   );

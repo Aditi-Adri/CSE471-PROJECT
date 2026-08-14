@@ -146,6 +146,10 @@ export async function GET(request: Request) {
         ratingAvg: true,
         ratingCount: true,
         completedJobs: true,
+        // MODULE 2 -> FEATURE 1 (Shiva): surfaced on the card so a
+        // customer comparing results sees it without opening every
+        // profile — doesn't change ranking/filtering, purely additive.
+        trustScore: true,
         avatarSeed: true,
         user: { select: { name: true } },
         categories: {
@@ -173,6 +177,7 @@ export async function GET(request: Request) {
     ratingAvg: w.ratingAvg,
     ratingCount: w.ratingCount,
     completedJobs: w.completedJobs,
+    trustScore: w.trustScore,
     avatarSeed: w.avatarSeed,
     categories: w.categories.map((wc) => ({ ...wc.category, isPrimary: wc.isPrimary })),
   }));

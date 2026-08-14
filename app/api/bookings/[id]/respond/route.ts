@@ -8,6 +8,7 @@ import { shapeBookingForViewer } from "@/lib/booking/shapeBookingForViewer";
 import { workerRespondSchema } from "@/lib/validation/bookingSchema";
 import { checkRateLimit, getClientIp } from "@/lib/auth/rateLimit";
 import { withErrorHandling } from "@/lib/api/withErrorHandling";
+import { recomputeTrustScore } from "@/lib/trust/recomputeTrustScore";
 
 /**
  * POST /api/bookings/[id]/respond
@@ -54,14 +55,21 @@ export const POST = withErrorHandling(
       );
     }
 
+    // MODULE 2 -> FEATURE 1 (Shiva): whichever of the three actions
+    // this is, it's the worker's first response to the request — set
+    // once here (the PENDING_ACCEPTANCE check above already stops a
+    // second response from reaching this route) and never touched
+    // again. Powers the Responsiveness trust-score metric.
+    const respondedAt = new Date();
+
     const updated = await (async () => {
       if (parsed.data.action === "reject") {
-        return prisma.booking.update({ where: { id: booking.id }, data: { status: "REJECTED" } });
+        return prisma.booking.update({ where: { id: booking.id }, data: { status: "REJECTED", respondedAt } });
       }
       if (parsed.data.action === "counter") {
         return prisma.booking.update({
           where: { id: booking.id },
-          data: { counterRateBdt: parsed.data.counterRateBdt },
+          data: { counterRateBdt: parsed.data.counterRateBdt, respondedAt },
         });
       }
       // accept
@@ -71,9 +79,14 @@ export const POST = withErrorHandling(
           status: "CONFIRMED",
           agreedRateBdt: booking.proposedRateBdt,
           arrivalCode: generateOtp(),
+          respondedAt,
         },
       });
     })();
+
+    // Worker row is guaranteed here — loadBookingWithViewerRole only
+    // returns viewer "worker" once it's matched worker.id === booking.workerId.
+    await recomputeTrustScore(booking.workerId!);
 
     return Response.json({ booking: shapeBookingForViewer(updated, "worker") });
   }
