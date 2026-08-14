@@ -16,9 +16,10 @@ import { confirmOrderPayment } from "@/lib/payments/confirmOrderPayment";
  * confirmOrderPayment is idempotent.
  */
 export async function POST(req: NextRequest) {
-  const form = await req.formData();
-  const tranId = String(form.get("tran_id") ?? "");
-  const valId = String(form.get("val_id") ?? "");
+  // See the same guard in .../success/route.ts.
+  const form = await req.formData().catch(() => null);
+  const tranId = String(form?.get("tran_id") ?? "");
+  const valId = String(form?.get("val_id") ?? "");
 
   if (tranId && valId) await confirmOrderPayment(tranId, valId);
 

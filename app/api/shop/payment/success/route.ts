@@ -12,9 +12,14 @@ import { confirmOrderPayment } from "@/lib/payments/confirmOrderPayment";
  * this endpoint has no UI of its own.
  */
 export async function POST(req: NextRequest) {
-  const form = await req.formData();
-  const tranId = String(form.get("tran_id") ?? "");
-  const valId = String(form.get("val_id") ?? "");
+  // A public, unauthenticated endpoint — malformed input (wrong
+  // Content-Type, no body) should fail gracefully into "unconfirmed",
+  // not throw. Real SSLCommerz callbacks always send proper
+  // form-encoded data; this guards against everything else that can
+  // hit a public URL.
+  const form = await req.formData().catch(() => null);
+  const tranId = String(form?.get("tran_id") ?? "");
+  const valId = String(form?.get("val_id") ?? "");
 
   const confirmed = tranId && valId ? await confirmOrderPayment(tranId, valId) : false;
 
