@@ -33,9 +33,18 @@ function formatBudget(minBdt: number | null, maxBdt: number | null): string | nu
  * workers can apply to the same request, so it stays listed here for
  * everyone else until the customer hires someone (see
  * /dashboard/my-applications for what happens after applying).
+ *
+ * Pre-fills the area filter from `?area=` if present — how the
+ * opportunities heatmap's "Browse jobs here" links land you already
+ * filtered instead of on the unfiltered full list. Read directly off
+ * `window.location` (not `useSearchParams`) so this stays a plain
+ * client component with no Suspense-boundary requirement on the page.
  */
 export function JobRequestsList() {
-  const [area, setArea] = useState("");
+  const [area, setArea] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return new URLSearchParams(window.location.search).get("area") ?? "";
+  });
   const [requests, setRequests] = useState<JobRequestItem[] | null>(null);
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);

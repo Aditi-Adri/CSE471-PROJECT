@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   ClipboardCheckIcon,
   IdCardIcon,
+  MapPinIcon,
   MessageIcon,
   ShieldCheckIcon,
   SirenIcon,
@@ -84,6 +85,12 @@ function getQuickLinks(role: Role, hasWorkerProfile: boolean): QuickLink[] {
           title: "My applications",
           description: "See which open requests you've applied to, and whether you got hired.",
           icon: MessageIcon,
+        },
+        {
+          href: "/dashboard/opportunities",
+          title: "Opportunities",
+          description: "A heatmap of which Dhaka neighborhoods need workers most, right now.",
+          icon: MapPinIcon,
         },
       ];
 
