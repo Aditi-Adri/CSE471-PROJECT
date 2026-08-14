@@ -1,11 +1,22 @@
 @import "tailwindcss";
 
 :root {
-  /* Primary dark theme background and text */
-  --background: #06060a;
-  --foreground: #f4f4f5;
+  /* Site-wide background/text — light by default, overridden below for
+     dark. Every section in the app sets its own bg-white/dark:bg-zinc-*
+     classes already; this is just the fallback body color underneath
+     them (overscroll bounce, any gap, first paint before hydration). */
+  --background: #ffffff;
+  --foreground: #09090b;
 
-  /* Live GPS tracking + SOS feature dark variables */
+  /* Live GPS tracking + SOS feature's own dark glassmorphism palette.
+     Intentionally NOT applied to `body`/`html` below — these pages
+     (app/track/**, app/sos/**) set this background on their own root
+     element (see TRACKING_PAGE_BACKGROUND in lib/ui/trackingTheme.ts)
+     instead of leaking a forced-dark theme onto the rest of the site,
+     which used to make every native form control (select, checkbox,
+     scrollbar) render dark even for a visitor whose browser prefers
+     light — regardless of the light-first Tailwind design everywhere
+     else. */
   --tracking-brand-indigo: #4f46e5;
   --tracking-pill-bg: #1c1e38;
   --tracking-ink: #f4f4f5;
@@ -14,6 +25,13 @@
   --tracking-purple-avatar: #7c3aed;
   --tracking-sos-red: #dc2626;
   --tracking-green: #22c55e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #09090b;
+    --foreground: #f4f4f5;
+  }
 }
 
 @theme inline {
@@ -38,12 +56,7 @@
 }
 
 body {
-  background-color: #06060a;
-  /* Deep purple/indigo radial gradient glow matching your screenshot */
-  background-image: 
-    radial-gradient(circle at 50% 15%, rgba(67, 56, 202, 0.4) 0%, rgba(30, 27, 75, 0.15) 50%, transparent 80%),
-    radial-gradient(circle at 80% 0%, rgba(99, 102, 241, 0.25) 0%, transparent 50%);
-  background-attachment: fixed;
+  background-color: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
   min-height: 100vh;
@@ -51,7 +64,10 @@ body {
 
 html {
   scroll-behavior: smooth;
-  color-scheme: dark; /* Forces dark styling on default native inputs & dropdowns */
+  /* Native form controls & scrollbars follow the browser's actual
+     light/dark preference, matching the `dark:` Tailwind variants used
+     throughout — not forced to always render dark. */
+  color-scheme: light dark;
 }
 
 ::selection {

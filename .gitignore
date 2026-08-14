@@ -42,6 +42,3 @@ yarn-error.log*
 next-env.d.ts
 
 /app/generated/prisma
-
-# not ready to publish yet — remove this line when ready to push README
-/README.md

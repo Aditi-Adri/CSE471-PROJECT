@@ -116,3 +116,24 @@ export function ClipboardCheckIcon({ className = base }: IconProps) {
     </svg>
   );
 }
+
+export function SirenIcon({ className = base }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path d="M5 13a7 7 0 0 1 14 0v6H5v-6Z" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" />
+      <path d="M12 3v3M4.5 8 6.6 9.7M19.5 8l-2.1 1.7" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+      <path d="M3 19h18" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function RadarIcon({ className = base }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.75" />
+      <circle cx="12" cy="12" r="4.5" stroke="currentColor" strokeWidth="1.75" />
+      <circle cx="12" cy="12" r="1.4" fill="currentColor" />
+      <path d="M12 12 17.5 7" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+    </svg>
+  );
+}

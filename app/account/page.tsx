@@ -2,24 +2,24 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/authOptions";
-import { LogoutButton } from "@/components/auth/LogoutButton";
+import { prisma } from "@/lib/db";
+import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
+import { QuickLinks } from "@/components/dashboard/QuickLinks";
+import { AccountSummaryCard } from "@/components/dashboard/AccountSummaryCard";
+import { ProfileSettingsForm } from "@/components/dashboard/ProfileSettingsForm";
+import { PasswordSettingsForm } from "@/components/dashboard/PasswordSettingsForm";
+// MODULE 3 (Sudiptha): Spare Parts Shop order history.
+import { OrderHistory } from "@/components/dashboard/OrderHistory";
 
-export const metadata: Metadata = {
-  title: "Your account",
-};
-
-const ROLE_LABELS: Record<string, string> = {
-  CUSTOMER: "Customer",
-  WORKER: "Worker",
-  CORPORATE: "Corporate Client",
-  ADMIN: "Admin",
-};
+export const metadata: Metadata = { title: "Dashboard" };
 
 /**
- * Minimal protected page — proves the whole auth loop end to end
- * (middleware.ts already redirects unauthenticated requests to
- * /login, this server-side check is defense in depth and how the
- * page reads the session data it renders).
+ * MODULE 1 -> Common Workflows (Shiva): the one dashboard every role
+ * lands on after signing in. Header, profile editing, and password
+ * management are identical for everyone; only the quick-actions grid
+ * and the account-summary card change per role, and only ever link to
+ * pages that actually exist for that role today (see
+ * docs/FEATURE_SPEC.md for what's built vs. still pending).
  */
 export default async function AccountPage() {
   const session = await getServerSession(authOptions);
@@ -27,40 +27,63 @@ export default async function AccountPage() {
     redirect("/login?callbackUrl=/account");
   }
 
-  const { user } = session;
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      address: true,
+      role: true,
+      passwordHash: true,
+      createdAt: true,
+      worker: { select: { verificationTier: true } },
+    },
+  });
 
-  if (user.role === "WORKER") {
-    redirect("/dashboard");
+  // Session cookie says we're signed in but the row is gone (deleted
+  // account, wiped dev database) — bounce to login instead of crashing
+  // on `user.name` below.
+  if (!user) {
+    redirect("/login?callbackUrl=/account");
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 py-16 sm:px-6 lg:px-8">
-      <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-lg shadow-zinc-900/5 sm:p-8 dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-black/20">
-        <div className="flex items-center gap-4">
-          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-100 text-lg font-semibold text-brand-700 dark:bg-brand-900 dark:text-brand-300">
-            {user.name?.[0]?.toUpperCase() ?? "?"}
-          </span>
-          <div>
-            <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">{user.name}</h1>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">{user.email}</p>
-          </div>
+    <div className="mx-auto w-full max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
+      <DashboardHeader userId={user.id} name={user.name} email={user.email} role={user.role} />
+
+      <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="flex flex-col gap-6 lg:col-span-2">
+          <section>
+            <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-50">Quick actions</h2>
+            <QuickLinks role={user.role} hasWorkerProfile={Boolean(user.worker)} />
+          </section>
+
+          <ProfileSettingsForm
+            initialName={user.name}
+            initialPhone={user.phone ?? ""}
+            initialAddress={user.address ?? ""}
+          />
+
+          {/* MODULE 3 (Sudiptha): Spare Parts Shop — recent purchases, workers only. */}
+          {user.role === "WORKER" && (
+            <section>
+              <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-50">Recent Purchases</h2>
+              <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+                <OrderHistory workerId={user.id} />
+              </div>
+            </section>
+          )}
         </div>
 
-        <dl className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <dt className="text-xs font-medium tracking-wide text-zinc-400 uppercase">Role</dt>
-            <dd className="mt-1 text-sm text-zinc-900 dark:text-zinc-100">
-              {ROLE_LABELS[user.role] ?? user.role}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs font-medium tracking-wide text-zinc-400 uppercase">Phone</dt>
-            <dd className="mt-1 text-sm text-zinc-900 dark:text-zinc-100">{user.phone ?? "Not set"}</dd>
-          </div>
-        </dl>
-
-        <div className="mt-8 border-t border-zinc-100 pt-6 dark:border-zinc-800">
-          <LogoutButton />
+        <div className="flex flex-col gap-6">
+          <AccountSummaryCard
+            role={user.role}
+            memberSince={user.createdAt}
+            verificationTier={user.worker?.verificationTier}
+          />
+          <PasswordSettingsForm hasPassword={Boolean(user.passwordHash)} />
         </div>
       </div>
     </div>

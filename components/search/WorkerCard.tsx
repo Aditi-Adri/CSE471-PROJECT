@@ -4,6 +4,7 @@ import { VerificationBadge } from "./VerificationBadge";
 import { RatingStars } from "./RatingStars";
 import { AREA_LABEL_BY_VALUE } from "@/lib/constants/dhakaAreas";
 import { formatRateRange, pluralize } from "@/lib/format";
+import { TrustScoreBadge } from "@/components/trust/TrustScoreBadge";
 import type { WorkerResult } from "@/lib/types/search";
 
 export function WorkerCard({ worker }: { worker: WorkerResult }) {
@@ -37,6 +38,7 @@ export function WorkerCard({ worker }: { worker: WorkerResult }) {
       <div className="flex flex-wrap items-center gap-2">
         <VerificationBadge tier={worker.verificationTier} />
         <RatingStars ratingAvg={worker.ratingAvg} ratingCount={worker.ratingCount} />
+        <TrustScoreBadge score={worker.trustScore} compact />
       </div>
 
       <div className="flex flex-wrap gap-1.5">

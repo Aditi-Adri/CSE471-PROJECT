@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireAdminSession } from "@/lib/verification/requireAdmin";
 import { tier1ReviewSchema } from "@/lib/validation/verificationSchemas";
 import { syncWorkerVerificationTier } from "@/lib/verification/applyTierApproval";
+import { recomputeTrustScore } from "@/lib/trust/recomputeTrustScore";
 import { withErrorHandling } from "@/lib/api/withErrorHandling";
 
 /** POST /api/admin/verifications/tier1 — approve/reject a Tier 1 submission. */
@@ -39,6 +40,11 @@ export const POST = withErrorHandling(async (request: Request) => {
   if (decision === "APPROVED") {
     await syncWorkerVerificationTier(workerId);
   }
+  // MODULE 2 -> FEATURE 1 (Shiva): a verification tier bump is one of
+  // the trust-score recompute triggers. Runs after either decision,
+  // not just APPROVED — a no-op read-and-rewrite when nothing actually
+  // changed is cheap, and simpler than branching on it separately.
+  await recomputeTrustScore(workerId);
 
   return Response.json({ status: decision });
 });

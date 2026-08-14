@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { mapQueryToCategory } from "@/lib/ai/categoryMapper";
 import { buildWorkerOrderBy, buildWorkerWhere } from "@/lib/search/buildWorkerQuery";
 import { searchRequestSchema } from "@/lib/validation/searchSchema";
+import { checkRateLimit, getClientIp } from "@/lib/auth/rateLimit";
 import type { DhakaArea, VerificationTier } from "@/app/generated/prisma/client";
 
 function parseIntParam(value: string | null): number | undefined {
@@ -29,6 +30,18 @@ function parseIntParam(value: string | null): number | undefined {
  */
 export async function GET(request: Request) {
   const startedAt = Date.now();
+
+  // Deliberately no sign-in requirement — browsing search results is
+  // meant to work for anonymous visitors — but every other public
+  // endpoint in the app rate-limits by IP and this one didn't, which
+  // left it as the one place a script could hammer the DB (and the
+  // optional Groq call in mapQueryToCategory) for free.
+  const ip = getClientIp(request);
+  const rateLimit = checkRateLimit(`search:${ip}`, 60, 60 * 1000);
+  if (!rateLimit.allowed) {
+    return Response.json({ error: "Too many search requests. Please slow down." }, { status: 429 });
+  }
+
   const { searchParams } = new URL(request.url);
 
   const parsed = searchRequestSchema.safeParse({
@@ -133,6 +146,10 @@ export async function GET(request: Request) {
         ratingAvg: true,
         ratingCount: true,
         completedJobs: true,
+        // MODULE 2 -> FEATURE 1 (Shiva): surfaced on the card so a
+        // customer comparing results sees it without opening every
+        // profile — doesn't change ranking/filtering, purely additive.
+        trustScore: true,
         avatarSeed: true,
         user: { select: { name: true } },
         categories: {
@@ -160,6 +177,7 @@ export async function GET(request: Request) {
     ratingAvg: w.ratingAvg,
     ratingCount: w.ratingCount,
     completedJobs: w.completedJobs,
+    trustScore: w.trustScore,
     avatarSeed: w.avatarSeed,
     categories: w.categories.map((wc) => ({ ...wc.category, isPrimary: wc.isPrimary })),
   }));
@@ -182,6 +200,7 @@ export async function GET(request: Request) {
           matchConfidence,
           resultCount: total,
           durationMs,
+          area: (filters.area as DhakaArea | undefined) ?? null,
         },
       })
       .catch((err) => console.error("Failed to write SearchLog:", err));

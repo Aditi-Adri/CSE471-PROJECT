@@ -1,17 +1,13 @@
-import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth/authOptions";
 
-export const metadata: Metadata = { title: "Dashboard" };
-
-export default async function DashboardPage() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) redirect("/login?callbackUrl=/dashboard");
-
-  if (session.user.role === "WORKER") {
-    redirect("/dashboard/worker-job");
-  }
-
-  redirect("/dashboard/verification");
+/**
+ * Bare `/dashboard` has no content of its own — the real, role-aware
+ * dashboard lives at /account (see app/account/page.tsx). This only
+ * exists so old links/bookmarks to "/dashboard" still land somewhere
+ * useful instead of 404ing. Specific tool pages (/dashboard/verification,
+ * /dashboard/worker-job, ...) are unaffected — this redirect only
+ * matches the exact bare path.
+ */
+export default function DashboardIndexPage() {
+  redirect("/account");
 }

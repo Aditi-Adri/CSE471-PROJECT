@@ -5,9 +5,11 @@ import { useSearchParams } from "next/navigation";
 import { SearchBar } from "./SearchBar";
 import { FilterPanel } from "./FilterPanel";
 import { WorkerCard } from "./WorkerCard";
+import { WorkerMapView } from "./WorkerMapView";
 import { ResultsSkeleton } from "./ResultsSkeleton";
 import { EmptyState, ErrorState } from "./EmptyState";
 import { DetectedCategoryBanner } from "./DetectedCategoryBanner";
+import { PostRequestForm } from "@/components/jobRequests/PostRequestForm";
 import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
 import { buildSearchUrl } from "@/lib/search/buildSearchUrl";
 import type { SortOption } from "@/lib/validation/searchSchema";
@@ -31,6 +33,8 @@ export function SearchExperience() {
   const [sort, setSort] = useState<SortOption>("RELEVANCE");
   const [page, setPage] = useState(1);
   const [retryNonce, setRetryNonce] = useState(0);
+  const [viewMode, setViewMode] = useState<"list" | "map">("list");
+  const [showPostForm, setShowPostForm] = useState(false);
 
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [response, setResponse] = useState<SearchApiResponse | null>(null);
@@ -86,12 +90,14 @@ export function SearchExperience() {
   function handleSubmitSearch() {
     setSubmittedQuery(queryInput);
     setPage(1);
+    setShowPostForm(false);
   }
 
   function handleQuickSearch(text: string) {
     setQueryInput(text);
     setSubmittedQuery(text);
     setPage(1);
+    setShowPostForm(false);
   }
 
   function handleFiltersChange(next: SearchFiltersState) {
@@ -142,6 +148,30 @@ export function SearchExperience() {
             />
           )}
 
+          {/* Typed something specific, but nothing matched any of our
+              service categories — rather than silently falling back to
+              "show everyone" with no explanation, say so, and offer to
+              post it as an open request instead. The full worker list
+              below still renders either way, so this never dead-ends. */}
+          {!loading && !error && response && !response.detectedCategory && submittedQuery.trim().length >= 2 && (
+            <div className="flex flex-col gap-3 rounded-xl border border-dashed border-zinc-300 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-900/40">
+              <p className="text-sm text-zinc-700 dark:text-zinc-300">
+                We don&apos;t have &ldquo;{submittedQuery}&rdquo; as a service yet.
+              </p>
+              {showPostForm ? (
+                <PostRequestForm initialDescription={submittedQuery} />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowPostForm(true)}
+                  className="self-start text-sm font-medium text-brand-700 underline-offset-2 hover:underline dark:text-brand-400"
+                >
+                  Can&apos;t find it? Post what you need and a technician can respond →
+                </button>
+              )}
+            </div>
+          )}
+
           {loading && <ResultsSkeleton />}
 
           {error && !loading && (
@@ -155,11 +185,31 @@ export function SearchExperience() {
                   {response.total} {response.total === 1 ? "technician" : "technicians"} found
                   {response.matchMethod === "NONE" && " · sorted by trust & rating"}
                 </span>
-                <span>Search took {response.durationMs}ms</span>
+                <div className="flex items-center gap-3">
+                  <span className="hidden sm:inline">Search took {response.durationMs}ms</span>
+                  <div className="flex rounded-full border border-zinc-200 p-0.5 dark:border-zinc-800">
+                    {(["list", "map"] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setViewMode(mode)}
+                        className={`rounded-full px-3 py-1 text-xs font-medium capitalize transition ${
+                          viewMode === mode
+                            ? "bg-brand-600 text-white"
+                            : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+                        }`}
+                      >
+                        {mode}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               {response.results.length === 0 ? (
                 <EmptyState message="No technicians match those filters yet. Try widening your budget or removing a filter." />
+              ) : viewMode === "map" ? (
+                <WorkerMapView workers={response.results} />
               ) : (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                   {response.results.map((worker) => (

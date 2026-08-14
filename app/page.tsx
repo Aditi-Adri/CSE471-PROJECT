@@ -8,7 +8,9 @@ import {
   IdCardIcon,
   MapPinIcon,
   MessageIcon,
+  RadarIcon,
   ShieldCheckIcon,
+  SirenIcon,
   SparkleIcon,
   StarIcon,
   WrenchIcon,
@@ -196,6 +198,43 @@ export default async function Home() {
         </div>
       </section>
 
+      {/* Live tracking & SOS */}
+      <section id="safety" className="border-t border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/40">
+        <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-xl text-center">
+            <h2 className="text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl dark:text-zinc-50">
+              Protected while the job happens
+            </h2>
+            <p className="mt-2 text-zinc-600 dark:text-zinc-400">
+              Verification is who you&apos;re letting in. This is what keeps you covered
+              once they&apos;re on the way.
+            </p>
+          </div>
+
+          <div className="mt-12 grid grid-cols-1 gap-6 md:grid-cols-2">
+            <SafetyFeature
+              icon={RadarIcon}
+              title="Live GPS tracking"
+              body="Watch your technician's route and ETA update in real time from the moment they're on the way — no guessing when they'll show up."
+            />
+            <SafetyFeature
+              icon={SirenIcon}
+              title="One-tap emergency SOS"
+              body="A single button pages every available verified technician within 3km for urgent household emergencies — first to respond gets routed straight to you."
+            />
+          </div>
+
+          <div className="mt-8 text-center">
+            <Link
+              href="/sos"
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 hover:underline dark:text-brand-400"
+            >
+              Try Emergency SOS →
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* Final CTA */}
       <section className="bg-brand-600">
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-5 px-4 py-16 text-center sm:px-6 lg:px-8">
@@ -238,6 +277,28 @@ function HowItWorksStep({
       </span>
       <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">{title}</h3>
       <p className="text-sm text-zinc-600 dark:text-zinc-400">{body}</p>
+    </div>
+  );
+}
+
+function SafetyFeature({
+  icon: Icon,
+  title,
+  body,
+}: {
+  icon: typeof RadarIcon;
+  title: string;
+  body: string;
+}) {
+  return (
+    <div className="flex items-start gap-4 rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-950 dark:text-brand-400">
+        <Icon className="h-5 w-5" />
+      </span>
+      <div>
+        <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">{title}</h3>
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{body}</p>
+      </div>
     </div>
   );
 }
