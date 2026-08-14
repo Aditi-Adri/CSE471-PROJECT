@@ -41,6 +41,8 @@ model User {
   /// category — see JobRequest below.
   jobRequests         JobRequest[]
   passwordResetTokens PasswordResetToken[]
+  /// Reviews this user has left as a customer — see Review below.
+  reviews             Review[]
   sessions            Session[]
   tier1Reviews        Tier1Verification[]    @relation("Tier1Reviewer")
   tier2Evaluations    Tier2SkillTest[]       @relation("Tier2Evaluator")
@@ -162,6 +164,22 @@ model Worker {
   currentLat             Float?
   currentLng             Float?
   locationUpdatedAt      DateTime?
+  /// =====================================================================
+  /// MODULE 2 -> FEATURE 1 (Shiva): AI TrustScore Engine + Review Fraud
+  /// Detection.
+  ///
+  /// A cached 0-100 composite reliability score, recomputed by
+  /// lib/trust/recomputeTrustScore.ts whenever an input changes (a new
+  /// review, a fraud-queue decision, a completed/responded booking, a
+  /// verification tier bump) — see lib/trust/trustScore.ts for the six
+  /// weighted metrics behind it. Cached rather than computed per-request
+  /// so search results can sort/filter on it cheaply, same reasoning as
+  /// ratingAvg/ratingCount above. Null only very briefly — every path
+  /// that creates a Worker computes an initial score right away.
+  /// =====================================================================
+  trustScore             Float?
+  trustScoreUpdatedAt    DateTime?
+  reviews                Review[]
   availability           AvailabilitySlot[]
   /// Open requests this worker has been hired for, and every request
   /// they've applied to (hired or not) — see JobRequest/
@@ -179,6 +197,7 @@ model Worker {
   @@index([isAvailableNow])
   @@index([hourlyRateMinBdt, hourlyRateMaxBdt])
   @@index([isOnline])
+  @@index([trustScore])
 }
 
 /// Many-to-many: a worker can list more than one active service category.
@@ -264,6 +283,17 @@ model Booking {
   /// `arrivalVerifiedAt` is set — see app/api/bookings/[id]/route.ts.
   /// =====================================================================
   serviceAddress     String?
+  /// MODULE 2 -> FEATURE 1 (Shiva): when the worker first responded
+  /// (accept/reject/counter) to this request — powers the
+  /// Responsiveness trust-score metric. Distinct from `updatedAt`,
+  /// which keeps moving on every later step (verify-code, complete, a
+  /// counter-offer, ...) so it can't be reused for this.
+  respondedAt        DateTime?
+  /// When this booking's status actually became COMPLETED — the
+  /// review window (72h, see lib/trust/reviewEligibility.ts) is
+  /// measured from here, same reasoning as respondedAt above.
+  completedAt        DateTime?
+  review             Review?
 
   @@index([workerId])
   @@index([customerId])
@@ -421,6 +451,54 @@ model JobRequestApplication {
   @@unique([jobRequestId, workerId])
   @@index([jobRequestId])
   @@index([workerId])
+}
+
+// =====================================================================
+// MODULE 2 -> FEATURE 1 (Shiva): AI TrustScore Engine + Review Fraud
+// Detection.
+//
+// A review is the customer's one-time verdict on a specific COMPLETED
+// booking — `bookingId` is @unique, one review per job, not one review
+// per worker. Eligibility (booking actually COMPLETED, within 72h of
+// completedAt, no existing review yet) is enforced in
+// lib/trust/reviewEligibility.ts, not just assumed client-side.
+//
+// Every submitted review is screened for fraud immediately (Groq if
+// GROQ_API_KEY is configured, otherwise the free local heuristic — see
+// lib/trust/fraudDetector.ts). A `fraudFlagged` review stays publicly
+// visible — a flag isn't proof, just a signal — but is excluded from
+// the trust score's rating/authenticity metrics and surfaced to admins
+// at app/admin/reviews, who can hide one they confirm is fake.
+// =====================================================================
+model Review {
+  id           String            @id @default(cuid())
+  bookingId    String            @unique
+  booking      Booking           @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  customerId   String
+  customer     User              @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  workerId     String
+  worker       Worker            @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  rating       Int
+  comment      String
+  /// Set by an admin after confirming a fraud flag — hidden reviews
+  /// stay in the database (nothing here is ever deleted) but drop out
+  /// of both the public list and every trust-score metric.
+  isHidden     Boolean           @default(false)
+  fraudFlagged Boolean           @default(false)
+  /// 0..1, higher = more likely fake. Null until the fraud check runs
+  /// (always synchronous on submit — see app/api/bookings/[id]/review).
+  fraudScore   Float?
+  fraudReason  String?
+  fraudMethod  FraudCheckMethod?
+  createdAt    DateTime          @default(now())
+
+  @@index([workerId])
+  @@index([fraudFlagged])
+}
+
+enum FraudCheckMethod {
+  AI
+  HEURISTIC
 }
 
 enum Role {
