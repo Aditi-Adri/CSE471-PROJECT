@@ -23,6 +23,11 @@ export function ReviewForm({ bookingId, workerName }: { bookingId: string; worke
   const [loading, setLoading] = useState(true);
   const [eligibility, setEligibility] = useState<Eligibility | null>(null);
   const [existingReview, setExistingReview] = useState<ExistingReview>(null);
+  // The star-picker + comment form starts collapsed behind a single
+  // "Give Rating" button rather than always showing — right after
+  // marking a job complete, that button is the one clear next action
+  // instead of a form landing on the page unasked.
+  const [formOpen, setFormOpen] = useState(false);
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const [comment, setComment] = useState("");
@@ -92,6 +97,22 @@ export function ReviewForm({ bookingId, workerName }: { bookingId: string; worke
       );
     }
     return null;
+  }
+
+  if (!formOpen) {
+    return (
+      <div className={`${cardClasses} flex items-center justify-between gap-4`}>
+        <div>
+          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">How was {workerName}&apos;s work?</p>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            You have until {new Date(eligibility.deadline).toLocaleString()} to leave a review.
+          </p>
+        </div>
+        <button type="button" onClick={() => setFormOpen(true)} className={primaryButtonClasses}>
+          ★ Give Rating
+        </button>
+      </div>
+    );
   }
 
   return (
