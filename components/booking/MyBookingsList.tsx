@@ -13,6 +13,13 @@ type MyBooking = {
   counterRateBdt: number | null;
   agreedRateBdt: number | null;
   createdAt: string;
+  /**
+   * Customer view only (absent on the worker's job list — see
+   * app/api/bookings/mine/route.ts). "can_review" is what turns the
+   * status pill below into a distinct, obviously-clickable "Rate now"
+   * call-to-action instead of a plain status label.
+   */
+  reviewStatus?: "none" | "can_review" | "reviewed";
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -62,11 +69,16 @@ export function MyBookingsList() {
     <div className="flex flex-col gap-3">
       {bookings.map((b) => {
         const rate = b.agreedRateBdt ?? b.counterRateBdt ?? b.proposedRateBdt;
+        const canReview = b.reviewStatus === "can_review";
         return (
           <Link
             key={b.id}
             href={`/bookings/${b.id}`}
-            className="flex items-center justify-between gap-4 rounded-2xl border border-zinc-200 bg-white p-5 transition hover:border-brand-300 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-brand-800"
+            className={`flex items-center justify-between gap-4 rounded-2xl border p-5 transition hover:shadow-md ${
+              canReview
+                ? "border-amber-300 bg-amber-50/60 hover:border-amber-400 dark:border-amber-800 dark:bg-amber-950/20 dark:hover:border-amber-700"
+                : "border-zinc-200 bg-white hover:border-brand-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-brand-800"
+            }`}
           >
             <div>
               <p className="font-semibold text-zinc-900 dark:text-zinc-50">{b.counterpartyName}</p>
@@ -74,10 +86,28 @@ export function MyBookingsList() {
                 {new Date(b.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                 {rate != null && <> · {formatCurrency(rate)}</>}
               </p>
+              {/* Spelled out, not just a colored pill — a status badge alone
+                  doesn't read as "click here to do something." */}
+              {canReview && (
+                <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+                  Tap to rate this job →
+                </p>
+              )}
             </div>
-            <span className="shrink-0 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700 dark:bg-brand-950 dark:text-brand-300">
-              {STATUS_LABEL[b.status] ?? b.status}
-            </span>
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              {canReview ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white shadow-sm">
+                  ★ Rate now
+                </span>
+              ) : (
+                <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700 dark:bg-brand-950 dark:text-brand-300">
+                  {STATUS_LABEL[b.status] ?? b.status}
+                </span>
+              )}
+              {b.reviewStatus === "reviewed" && (
+                <span className="text-[11px] text-zinc-400 dark:text-zinc-500">✓ You rated this</span>
+              )}
+            </div>
           </Link>
         );
       })}
