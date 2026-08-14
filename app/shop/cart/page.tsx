@@ -1,0 +1,263 @@
+"use client";
+
+// FEATURE: Spare Parts Store — Cart & Bill page
+// Review selected parts, adjust quantities, see the itemised bill and confirm
+// payment. Stock conflicts reported by the API are surfaced inline.
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { useEffect, useState } from "react";
+import { useCart } from "@/components/shop/CartProvider";
+import { formatBdt, lineSubtotal, type ShopItem } from "@/lib/types/shop";
+
+export default function CartPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const { lines, totalQuantity, totalBill, addItem, decreaseItem, removeItem, clearCart, syncStock } =
+    useCart();
+
+  const [error, setError] = useState("");
+  const [confirming, setConfirming] = useState(false);
+  const [placedOrder, setPlacedOrder] = useState<{ id: number; total: number } | null>(null);
+
+  // FEATURE: Any signed-in account can check out
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/login");
+    }
+  }, [status, router]);
+
+  const refreshStock = async () => {
+    try {
+      const res = await fetch("/api/shop/items");
+      if (!res.ok) return;
+      const data: ShopItem[] = await res.json();
+      syncStock(data);
+    } catch (err) {
+      console.error("Failed to refresh stock:", err);
+    }
+  };
+
+  // FEATURE: Confirm payment — POST /api/shop/orders
+  const handleConfirmPayment = async () => {
+    if (lines.length === 0) {
+      setError("Your cart is empty.");
+      return;
+    }
+
+    try {
+      setConfirming(true);
+      setError("");
+      const res = await fetch("/api/shop/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workerId: session?.user?.id,
+          items: lines.map((l) => ({ itemId: l.itemId, quantity: l.quantity })),
+        }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        // Stock changed under us — show the API's message and re-sync caps
+        setError(data.error || "Failed to confirm the order.");
+        await refreshStock();
+        return;
+      }
+
+      setPlacedOrder({ id: data.orderId, total: Number(data.totalAmount) });
+      clearCart();
+    } catch (err) {
+      console.error(err);
+      setError("Something went wrong while confirming the order.");
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  if (status === "loading") {
+    return (
+      <div className="flex flex-1 items-center justify-center bg-zinc-50 px-4 py-24 dark:bg-zinc-950">
+        <p className="animate-pulse text-sm text-zinc-500 dark:text-zinc-400">Loading cart…</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 bg-zinc-50 dark:bg-zinc-950">
+      <div className="mx-auto w-full max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <Link
+              href="/shop"
+              className="text-sm font-medium text-brand-600 transition hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+            >
+              ← Back to spare parts
+            </Link>
+            <h1 className="mt-2 text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl dark:text-zinc-50">
+              Cart &amp; Bill
+            </h1>
+          </div>
+          {totalQuantity > 0 && (
+            <span className="rounded-full bg-brand-50 px-3 py-1.5 text-sm font-semibold text-brand-700 dark:bg-brand-950 dark:text-brand-300">
+              {totalQuantity} item{totalQuantity === 1 ? "" : "s"}
+            </span>
+          )}
+        </div>
+
+        {/* FEATURE: Order confirmation */}
+        {placedOrder && (
+          <div className="mt-6 rounded-2xl border border-green-200 bg-green-50 p-5 dark:border-green-900/60 dark:bg-green-950/40">
+            <p className="font-semibold text-green-800 dark:text-green-300">
+              ✓ Payment confirmed — added to the job bill
+            </p>
+            <p className="mt-1 text-sm text-green-700 dark:text-green-400">
+              Order #{placedOrder.id} · {formatBdt(placedOrder.total)}
+            </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link
+                href="/shop"
+                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
+              >
+                Buy more parts
+              </Link>
+              <Link
+                href="/dashboard"
+                className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              >
+                Back to dashboard
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">
+            {error}
+          </div>
+        )}
+
+        {lines.length === 0 && !placedOrder ? (
+          <div className="mt-8 rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-16 text-center dark:border-zinc-700 dark:bg-zinc-900">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">Your cart is empty.</p>
+            <Link
+              href="/shop"
+              className="mt-4 inline-flex rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
+            >
+              Browse spare parts
+            </Link>
+          </div>
+        ) : lines.length > 0 ? (
+          <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_20rem] lg:items-start">
+            {/* FEATURE: Cart lines */}
+            <div className="divide-y divide-zinc-100 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900">
+              {lines.map((line) => (
+                <div key={line.itemId} className="flex flex-wrap items-center gap-4 p-5">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate font-semibold text-zinc-900 dark:text-zinc-50">
+                      {line.name}
+                    </h3>
+                    <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
+                      {formatBdt(line.price)} each · {line.stockQty} in stock
+                    </p>
+                  </div>
+
+                  {/* Quantity stepper */}
+                  <div className="flex items-center gap-1 rounded-lg border border-zinc-200 p-1 dark:border-zinc-700">
+                    <button
+                      type="button"
+                      aria-label={`Decrease ${line.name}`}
+                      onClick={() => decreaseItem(line.itemId)}
+                      className="h-8 w-8 rounded-md text-zinc-700 transition hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                    >
+                      −
+                    </button>
+                    <span className="w-8 text-center text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                      {line.quantity}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={`Increase ${line.name}`}
+                      disabled={line.quantity >= line.stockQty}
+                      onClick={() =>
+                        addItem({
+                          id: line.itemId,
+                          name: line.name,
+                          price: line.price,
+                          stockQty: line.stockQty,
+                          useCase: "",
+                        })
+                      }
+                      className="h-8 w-8 rounded-md text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-300 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:disabled:text-zinc-600"
+                    >
+                      +
+                    </button>
+                  </div>
+
+                  <div className="w-24 text-right font-semibold text-zinc-900 dark:text-zinc-100">
+                    {formatBdt(lineSubtotal(line))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => removeItem(line.itemId)}
+                    className="text-sm font-medium text-red-600 transition hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* FEATURE: Bill summary */}
+            <aside className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm lg:sticky lg:top-24 dark:border-zinc-800 dark:bg-zinc-900">
+              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Bill</h2>
+
+              <dl className="mt-4 space-y-2 text-sm">
+                {lines.map((line) => (
+                  <div key={line.itemId} className="flex justify-between gap-3">
+                    <dt className="truncate text-zinc-600 dark:text-zinc-400">
+                      {line.name} × {line.quantity}
+                    </dt>
+                    <dd className="shrink-0 font-medium text-zinc-900 dark:text-zinc-100">
+                      {formatBdt(lineSubtotal(line))}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+
+              <div className="mt-5 flex items-baseline justify-between border-t border-zinc-200 pt-4 dark:border-zinc-800">
+                <span className="font-semibold text-zinc-900 dark:text-zinc-100">Total</span>
+                <span className="text-2xl font-bold text-brand-600 dark:text-brand-400">
+                  {formatBdt(totalBill)}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleConfirmPayment}
+                disabled={confirming || lines.length === 0}
+                className="mt-5 w-full rounded-lg bg-brand-600 px-4 py-3 text-sm font-semibold text-white shadow-sm shadow-brand-600/20 transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-500 dark:disabled:bg-zinc-800 dark:disabled:text-zinc-500"
+              >
+                {confirming ? "Confirming…" : "Confirm payment"}
+              </button>
+
+              <button
+                type="button"
+                onClick={clearCart}
+                className="mt-2 w-full rounded-lg px-4 py-2 text-sm font-medium text-zinc-500 transition hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+              >
+                Clear cart
+              </button>
+
+              <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+                The amount is added to the job bill once confirmed.
+              </p>
+            </aside>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}

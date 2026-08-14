@@ -8,6 +8,8 @@ import { QuickLinks } from "@/components/dashboard/QuickLinks";
 import { AccountSummaryCard } from "@/components/dashboard/AccountSummaryCard";
 import { ProfileSettingsForm } from "@/components/dashboard/ProfileSettingsForm";
 import { PasswordSettingsForm } from "@/components/dashboard/PasswordSettingsForm";
+// MODULE 3 (Sudiptha): Spare Parts Shop order history.
+import { OrderHistory } from "@/components/dashboard/OrderHistory";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -63,6 +65,16 @@ export default async function AccountPage() {
             initialPhone={user.phone ?? ""}
             initialAddress={user.address ?? ""}
           />
+
+          {/* MODULE 3 (Sudiptha): Spare Parts Shop — recent purchases, workers only. */}
+          {user.role === "WORKER" && (
+            <section>
+              <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-50">Recent Purchases</h2>
+              <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+                <OrderHistory workerId={user.id} />
+              </div>
+            </section>
+          )}
         </div>
 
         <div className="flex flex-col gap-6">

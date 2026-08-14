@@ -11,6 +11,8 @@ const NAV_LINKS = [
   { href: "/#categories", label: "Categories" },
   { href: "/#safety", label: "Safety" },
   { href: "/#trust", label: "Trust & verification" },
+  // MODULE 3 (Sudiptha): Spare Parts Shop.
+  { href: "/shop", label: "Spare Parts Shop" },
 ];
 
 export function SiteHeader() {

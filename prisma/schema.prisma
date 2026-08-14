@@ -40,6 +40,10 @@ model User {
   /// Requests this user posted when a search came up with no matching
   /// category — see JobRequest below.
   jobRequests         JobRequest[]
+  /// Spare-parts orders this worker placed — see Order below. Named
+  /// `orders`, not `workerOrders`: only workers buy from the shop
+  /// today, but the field itself doesn't assume a role.
+  orders              Order[]
   passwordResetTokens PasswordResetToken[]
   /// Reviews this user has left as a customer — see Review below.
   reviews             Review[]
@@ -508,6 +512,69 @@ model Review {
 enum FraudCheckMethod {
   AI
   HEURISTIC
+}
+
+// =====================================================================
+// MODULE 3 (Sudiptha): Spare Parts E-Commerce Shop.
+//
+// A parts catalog (`/shop`) + order history for workers restocking
+// supplies. `OrderItem.itemName`/`unitPrice`/`subtotal` are a snapshot
+// captured at purchase time, not derived live from `Item` — a later
+// price/name change on the catalog never rewrites a past order's
+// total. Integer autoincrement ids and `Decimal` money fields (unlike
+// the cuid()/Float convention elsewhere in this schema) and
+// `Order.workerId` pointing at `User.id` rather than `Worker.id` are
+// kept exactly as applied rather than reshaped — this already matches
+// the live database (migration: add_spare_parts_store). See
+// docs/SPARE_PARTS_FEATURE.md.
+// =====================================================================
+model Item {
+  id         Int         @id @default(autoincrement())
+  name       String
+  pictureUrl String?
+  useCase    String
+  price      Decimal     @db.Decimal(10, 2)
+  stockQty   Int         @default(0)
+  workType   String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  orderItems OrderItem[]
+
+  @@index([workType])
+  @@index([stockQty])
+}
+
+/// One checkout by a worker. `jobId` is a free-text reference to the
+/// job it was bought for — no JobRequest/Booking foreign key, not
+/// enforced, same "loose reference" the original migration shipped
+/// with.
+model Order {
+  id          Int         @id @default(autoincrement())
+  workerId    String
+  worker      User        @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  jobId       String?
+  totalAmount Decimal     @db.Decimal(10, 2)
+  createdAt   DateTime    @default(now())
+  items       OrderItem[]
+
+  @@index([workerId])
+  @@index([jobId])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id        Int     @id @default(autoincrement())
+  orderId   Int
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  itemId    Int
+  item      Item    @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  itemName  String
+  quantity  Int
+  unitPrice Decimal @db.Decimal(10, 2)
+  subtotal  Decimal @db.Decimal(10, 2)
+
+  @@index([orderId])
+  @@index([itemId])
 }
 
 enum Role {

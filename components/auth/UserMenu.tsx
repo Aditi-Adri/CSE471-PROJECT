@@ -98,6 +98,14 @@ export function UserMenu() {
               >
                 Opportunities
               </Link>
+              {/* MODULE 3 (Sudiptha): Spare Parts Shop. */}
+              <Link
+                href="/shop"
+                onClick={() => setOpen(false)}
+                className="block px-4 py-2 text-sm text-zinc-700 transition hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                Shop
+              </Link>
             </>
           )}
           {session.user.role === "ADMIN" && (
