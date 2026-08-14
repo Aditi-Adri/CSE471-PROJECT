@@ -5,21 +5,47 @@
 // payment. Stock conflicts reported by the API are surfaced inline.
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useCart } from "@/components/shop/CartProvider";
 import { formatBdt, lineSubtotal, type ShopItem } from "@/lib/types/shop";
 
+// MODULE 3 (Shiva): what the customer lands back to after the real
+// SSLCommerz gateway (app/api/shop/payment/success|fail|cancel), read
+// from the ?payment= query param those redirects set.
+type PaymentReturnState = "success" | "failed" | "cancelled" | "unconfirmed" | null;
+
+// useSearchParams() requires a Suspense boundary above it (it opts
+// the tree under it out of static rendering) — this wrapper is that
+// boundary; CartPageContent below has the actual page.
 export default function CartPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-1 items-center justify-center bg-zinc-50 px-4 py-24 dark:bg-zinc-950">
+          <p className="animate-pulse text-sm text-zinc-500 dark:text-zinc-400">Loading cart…</p>
+        </div>
+      }
+    >
+      <CartPageContent />
+    </Suspense>
+  );
+}
+
+function CartPageContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { lines, totalQuantity, totalBill, addItem, decreaseItem, removeItem, clearCart, syncStock } =
     useCart();
 
   const [error, setError] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [placedOrder, setPlacedOrder] = useState<{ id: number; total: number } | null>(null);
+  const [paymentReturn] = useState<PaymentReturnState>(
+    () => searchParams.get("payment") as PaymentReturnState
+  );
 
   // FEATURE: Any signed-in account can check out
   useEffect(() => {
@@ -66,8 +92,20 @@ export default function CartPage() {
         return;
       }
 
-      setPlacedOrder({ id: data.orderId, total: Number(data.totalAmount) });
       clearCart();
+
+      // MODULE 3 (Shiva): a real payment session was opened — send the
+      // browser to SSLCommerz's hosted checkout page. The order is
+      // already created (PENDING), so this leaves the page entirely;
+      // it comes back via one of the /api/shop/payment/* redirects.
+      if (data.paymentUrl) {
+        window.location.href = data.paymentUrl;
+        return;
+      }
+
+      // No gateway configured (SSLCOMMERZ_STORE_ID/PASSWORD unset) —
+      // same as before this existed, the order is just marked paid.
+      setPlacedOrder({ id: data.orderId, total: Number(data.totalAmount) });
     } catch (err) {
       console.error(err);
       setError("Something went wrong while confirming the order.");
@@ -105,6 +143,39 @@ export default function CartPage() {
             </span>
           )}
         </div>
+
+        {/* MODULE 3 (Shiva): landed back from the real SSLCommerz gateway. */}
+        {paymentReturn === "success" && (
+          <div className="mt-6 rounded-2xl border border-green-200 bg-green-50 p-5 dark:border-green-900/60 dark:bg-green-950/40">
+            <p className="font-semibold text-green-800 dark:text-green-300">✓ Payment confirmed via SSLCommerz</p>
+            <p className="mt-1 text-sm text-green-700 dark:text-green-400">
+              Your order has been paid and added to the job bill.
+            </p>
+            <Link
+              href="/shop"
+              className="mt-4 inline-flex rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
+            >
+              Buy more parts
+            </Link>
+          </div>
+        )}
+        {(paymentReturn === "failed" || paymentReturn === "cancelled" || paymentReturn === "unconfirmed") && (
+          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5 dark:border-amber-900/60 dark:bg-amber-950/40">
+            <p className="font-semibold text-amber-800 dark:text-amber-300">
+              {paymentReturn === "cancelled" ? "Payment cancelled" : "Payment wasn't completed"}
+            </p>
+            <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
+              Nothing was charged and the reserved stock was released. Add the items again if you&apos;d like to
+              retry.
+            </p>
+            <Link
+              href="/shop"
+              className="mt-4 inline-flex rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
+            >
+              Back to spare parts
+            </Link>
+          </div>
+        )}
 
         {/* FEATURE: Order confirmation */}
         {placedOrder && (

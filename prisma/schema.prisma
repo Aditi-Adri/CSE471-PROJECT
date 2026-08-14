@@ -556,10 +556,30 @@ model Order {
   totalAmount Decimal     @db.Decimal(10, 2)
   createdAt   DateTime    @default(now())
   items       OrderItem[]
+  /// =====================================================================
+  /// MODULE 3 (Shiva): SSLCommerz sandbox payment integration for the
+  /// Spare Parts Shop checkout.
+  ///
+  /// PENDING the moment the order+items are written (see
+  /// app/api/shop/orders/route.ts), flipped to PAID/FAILED/CANCELLED by
+  /// whichever of the gateway's callbacks lands first (success/fail/
+  /// cancel redirect or the IPN — see app/api/shop/payment/*). `tranId`
+  /// is what ties this row back to the gateway session; `valId` is only
+  /// set once SSLCommerz's own validation API has actually confirmed the
+  /// transaction server-side — the browser redirect alone is never
+  /// trusted on its own. See lib/payments/sslcommerz.ts for why this is
+  /// optional/graceful-fallback, same free-APIs-only pattern as Groq.
+  /// =====================================================================
+  paymentStatus PaymentStatus @default(PENDING)
+  tranId        String        @unique
+  valId         String?
+  cardType      String?
+  paidAt        DateTime?
 
   @@index([workerId])
   @@index([jobId])
   @@index([createdAt])
+  @@index([paymentStatus])
 }
 
 model OrderItem {
@@ -582,6 +602,15 @@ enum Role {
   WORKER
   CORPORATE
   ADMIN
+}
+
+/// MODULE 3 (Shiva): Spare Parts Shop checkout payment status — see the
+/// banner comment above Order.paymentStatus.
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  CANCELLED
 }
 
 /// Three-tier trust badge from the Worker Verification feature (Module 1

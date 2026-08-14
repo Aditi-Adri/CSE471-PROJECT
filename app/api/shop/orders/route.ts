@@ -1,11 +1,9 @@
-// FEATURE: Spare Parts Store — POST /api/shop/orders
-// Creates a new order with transaction validation for stock deduction
-// Validates stock availability, deducts items, saves order + order_items
-
+import { randomUUID } from "node:crypto";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/authOptions";
 import { prisma } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
+import { initiateSslcommerzPayment, isSslcommerzConfigured } from "@/lib/payments/sslcommerz";
 
 // FEATURE: Request type for order creation
 interface OrderItemRequest {
@@ -75,6 +73,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // MODULE 3 (Shiva): if SSLCOMMERZ_STORE_ID/PASSWORD aren't set,
+    // the order still goes through — same "free API, graceful
+    // fallback" shape as Groq (lib/ai/categoryMapper.ts) — just
+    // marked PAID immediately instead of routed through a real
+    // gateway. See lib/payments/sslcommerz.ts.
+    const willUseGateway = isSslcommerzConfigured();
+    const tranId = `hirelocal-${randomUUID()}`;
+
     // FEATURE: Step 3-6: Use transaction to deduct stock + create order + create order_items
     // If any step fails, entire transaction rolls back (no partial stock deduction)
     const result = await prisma.$transaction(async (tx) => {
@@ -112,6 +118,9 @@ export async function POST(req: NextRequest) {
           workerId,
           jobId: jobId || null,
           totalAmount: totalAmount,
+          tranId,
+          paymentStatus: willUseGateway ? "PENDING" : "PAID",
+          paidAt: willUseGateway ? null : new Date(),
         },
       });
 
@@ -130,13 +139,53 @@ export async function POST(req: NextRequest) {
       return { order, itemsCount: createdOrderItems.count };
     });
 
-    // FEATURE: Step 6: Transaction committed successfully
+    // MODULE 3 (Shiva): order + stock are committed at this point
+    // regardless — opening the payment session is a separate step
+    // after, not part of the same DB transaction (it's a network call
+    // to SSLCommerz, not something that rolls back).
+    let paymentUrl: string | null = null;
+    if (willUseGateway) {
+      const origin = process.env.NEXTAUTH_URL ?? req.nextUrl.origin;
+      const customer = await prisma.user.findUnique({
+        where: { id: workerId },
+        select: { name: true, email: true, phone: true, address: true },
+      });
+
+      const session_ = await initiateSslcommerzPayment({
+        tranId,
+        totalAmountBdt: Number(result.order.totalAmount),
+        customerName: customer?.name ?? "HireLocal user",
+        customerEmail: customer?.email ?? "no-reply@hirelocal.test",
+        customerPhone: customer?.phone ?? "01700000000",
+        customerAddress: customer?.address ?? "Dhaka, Bangladesh",
+        productName: `Spare parts order #${result.order.id} (${result.itemsCount} item${result.itemsCount === 1 ? "" : "s"})`,
+        successUrl: `${origin}/api/shop/payment/success`,
+        failUrl: `${origin}/api/shop/payment/fail`,
+        cancelUrl: `${origin}/api/shop/payment/cancel`,
+        ipnUrl: `${origin}/api/shop/payment/ipn`,
+      });
+
+      if (session_) {
+        paymentUrl = session_.gatewayUrl;
+      } else {
+        // Configured but the gateway call itself failed (network
+        // blip, bad credentials, etc.) — don't strand a PENDING order
+        // with decremented stock and no way to ever pay for it.
+        console.error(`SSLCommerz session init failed for order ${result.order.id}; falling back to demo mode.`);
+        await prisma.order.update({
+          where: { id: result.order.id },
+          data: { paymentStatus: "PAID", paidAt: new Date() },
+        });
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      message: "Order confirmed and added to bill",
+      message: paymentUrl ? "Redirecting to payment gateway" : "Order confirmed and added to bill",
       orderId: result.order.id,
       totalAmount: result.order.totalAmount,
       itemsCount: result.itemsCount,
+      paymentUrl,
     });
   } catch (error) {
     console.error("Error creating order:", error);
