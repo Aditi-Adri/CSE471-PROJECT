@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+:root {
+  /* Site-wide background/text — light by default, overridden below for
+     dark. Every section in the app sets its own bg-white/dark:bg-zinc-*
+     classes already; this is just the fallback body color underneath
+     them (overscroll bounce, any gap, first paint before hydration). */
+  --background: #ffffff;
+  --foreground: #09090b;
+
+  /* Live GPS tracking + SOS feature's own dark glassmorphism palette.
+     Intentionally NOT applied to `body`/`html` below — these pages
+     (app/track/**, app/sos/**) set this background on their own root
+     element (see TRACKING_PAGE_BACKGROUND in lib/ui/trackingTheme.ts)
+     instead of leaking a forced-dark theme onto the rest of the site,
+     which used to make every native form control (select, checkbox,
+     scrollbar) render dark even for a visitor whose browser prefers
+     light — regardless of the light-first Tailwind design everywhere
+     else. */
+  --tracking-brand-indigo: #4f46e5;
+  --tracking-pill-bg: #1c1e38;
+  --tracking-ink: #f4f4f5;
+  --tracking-card-bg: #14162b;
+  --tracking-gray-panel: #1c1e38;
+  --tracking-purple-avatar: #7c3aed;
+  --tracking-sos-red: #dc2626;
+  --tracking-green: #22c55e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #09090b;
+    --foreground: #f4f4f5;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  /* Brand scale */
+  --color-brand-50: #eef2ff;
+  --color-brand-100: #e0e7ff;
+  --color-brand-200: #c7d2fe;
+  --color-brand-300: #a5b4fc;
+  --color-brand-400: #818cf8;
+  --color-brand-500: #6366f1;
+  --color-brand-600: #4f46e5;
+  --color-brand-700: #4338ca;
+  --color-brand-800: #362f9e;
+  --color-brand-900: #2a2578;
+  --color-brand-950: #1c1852;
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  min-height: 100vh;
+}
+
+html {
+  scroll-behavior: smooth;
+  /* Native form controls & scrollbars follow the browser's actual
+     light/dark preference, matching the `dark:` Tailwind variants used
+     throughout — not forced to always render dark. */
+  color-scheme: light dark;
+}
+
+::selection {
+  background: var(--color-brand-200);
+  color: var(--color-brand-900);
+}
+

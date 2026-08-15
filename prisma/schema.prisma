@@ -1,0 +1,807 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// =====================================================================
+/// MODULE 1 -> Common Workflows (Shiva): Registration, Login (email/
+/// password + Google SSO), Logout & Session Management.
+///
+/// Extends the User model the team agreed to share (see note above)
+/// rather than duplicating it, and adds the NextAuth.js Prisma-adapter
+/// tables (Account, Session, VerificationToken) plus a dedicated
+/// PasswordResetToken table for the forgot-password flow.
+/// =====================================================================
+model User {
+  id                  String                 @id @default(cuid())
+  name                String
+  email               String                 @unique
+  emailVerified       DateTime?
+  image               String?
+  phone               String?                @unique
+  passwordHash        String?
+  role                Role                   @default(CUSTOMER)
+  /// Account-lockout rate limiting for the credentials login flow (see
+  /// lib/auth/authOptions.ts). Reset on a successful login.
+  failedLoginAttempts Int                    @default(0)
+  lockedUntil         DateTime?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  /// Customer's saved home/service address — set from the dashboard
+  /// (see app/api/account/profile). Surfaced to the assigned worker
+  /// only after a booking is confirmed (arrival-code match), never
+  /// before — see docs/FEATURE_SPEC.md's booking-flow section.
+  address             String?
+  accounts            Account[]
+  /// Requests this user posted when a search came up with no matching
+  /// category — see JobRequest below.
+  jobRequests         JobRequest[]
+  /// Spare-parts orders this worker placed — see Order below. Named
+  /// `orders`, not `workerOrders`: only workers buy from the shop
+  /// today, but the field itself doesn't assume a role.
+  orders              Order[]
+  passwordResetTokens PasswordResetToken[]
+  /// Reviews this user has left as a customer — see Review below.
+  reviews             Review[]
+  sessions            Session[]
+  tier1Reviews        Tier1Verification[]    @relation("Tier1Reviewer")
+  tier2Evaluations    Tier2SkillTest[]       @relation("Tier2Evaluator")
+  tier3Reviews        Tier3PoliceClearance[] @relation("Tier3Reviewer")
+  worker              Worker?
+
+  @@index([role])
+}
+
+/// Links an OAuth identity (Google, ...) to a User. Standard shape
+/// expected by @next-auth/prisma-adapter — see https://authjs.dev/getting-started/adapters/prisma
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+/// Required by @next-auth/prisma-adapter's type surface. Not used for
+/// reads/writes while `session.strategy = "jwt"` (credentials login
+/// requires JWT sessions), but keeping the table means we can switch to
+/// database sessions later with zero schema changes.
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// Required by @next-auth/prisma-adapter's type surface (used for
+/// email/magic-link providers, which we don't enable — kept for the
+/// same forward-compatibility reason as Session).
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+/// One-time, short-lived token for the "forgot password" flow. We store
+/// a hash of the token (never the raw value) so a database leak alone
+/// can't be used to take over an account — the raw token only ever
+/// exists in the emailed link and the requester's browser.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// A bookable service type (Plumbing, Electrical, ...). `keywords` powers
+/// the free, zero-cost fallback classifier in lib/ai/keywordEngine.ts.
+model ServiceCategory {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  slug        String           @unique
+  description String
+  icon        String
+  keywords    String[]
+  createdAt   DateTime         @default(now())
+  workers     WorkerCategory[]
+  /// MODULE 2 -> FEATURE 4 (Sudiptha): completed jobs filed under this
+  /// category — see WorkerJob below.
+  workerJobs  WorkerJob[]
+
+  @@index([slug])
+}
+
+model Worker {
+  id                     String                  @id @default(cuid())
+  userId                 String                  @unique
+  headline               String
+  bio                    String
+  area                   DhakaArea
+  addressDetail          String
+  hourlyRateMinBdt       Int
+  hourlyRateMaxBdt       Int
+  verificationTier       VerificationTier        @default(UNVERIFIED)
+  yearsExperience        Int                     @default(0)
+  isAvailableNow         Boolean                 @default(true)
+  ratingAvg              Float                   @default(0)
+  ratingCount            Int                     @default(0)
+  completedJobs          Int                     @default(0)
+  avatarSeed             String
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  /// =====================================================================
+  /// MODULE 1 -> FEATURE 3 (Jishan): Live Worker Tracking & SOS Emergency
+  /// Dispatch.
+  ///
+  /// Real GPS, on the Worker's own row — no separate location table. A
+  /// worker is only a live SOS/tracking candidate while `isOnline` is
+  /// true; `currentLat`/`currentLng` are the last position their browser
+  /// reported via the Geolocation API (free, no key), pushed over the
+  /// existing Socket.IO connection. `locationUpdatedAt` lets us treat a
+  /// stale fix (no update in a while) as effectively offline without a
+  /// background job. See lib/geo.ts for the Haversine range check and
+  /// app/api/sos/route.ts for how this feeds the 3km SOS broadcast.
+  /// =====================================================================
+  isOnline               Boolean                 @default(false)
+  currentLat             Float?
+  currentLng             Float?
+  locationUpdatedAt      DateTime?
+  /// =====================================================================
+  /// MODULE 2 -> FEATURE 1 (Shiva): AI TrustScore Engine + Review Fraud
+  /// Detection.
+  ///
+  /// A cached 0-100 composite reliability score, recomputed by
+  /// lib/trust/recomputeTrustScore.ts whenever an input changes (a new
+  /// review, a fraud-queue decision, a completed/responded booking, a
+  /// verification tier bump) — see lib/trust/trustScore.ts for the six
+  /// weighted metrics behind it. Cached rather than computed per-request
+  /// so search results can sort/filter on it cheaply, same reasoning as
+  /// ratingAvg/ratingCount above. Null only very briefly — every path
+  /// that creates a Worker computes an initial score right away.
+  /// =====================================================================
+  trustScore             Float?
+  trustScoreUpdatedAt    DateTime?
+  reviews                Review[]
+  availability           AvailabilitySlot[]
+  /// Open requests this worker has been hired for, and every request
+  /// they've applied to (hired or not) — see JobRequest/
+  /// JobRequestApplication below.
+  hiredJobRequests       JobRequest[]            @relation("HiredForJobRequest")
+  jobRequestApplications JobRequestApplication[]
+  tier1Verification      Tier1Verification?
+  tier2SkillTest         Tier2SkillTest?
+  tier3PoliceClearance   Tier3PoliceClearance?
+  user                   User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categories             WorkerCategory[]
+  /// MODULE 2 -> FEATURE 4 (Sudiptha): Worker Income Intelligence Dashboard
+  /// + AI Predictive Planner — see WorkerJob/WorkerAnalytics below.
+  jobs                   WorkerJob[]
+  analytics              WorkerAnalytics[]
+
+  @@index([area])
+  @@index([verificationTier])
+  @@index([isAvailableNow])
+  @@index([hourlyRateMinBdt, hourlyRateMaxBdt])
+  @@index([isOnline])
+  @@index([trustScore])
+}
+
+/// Many-to-many: a worker can list more than one active service category.
+model WorkerCategory {
+  id         String          @id @default(cuid())
+  workerId   String
+  categoryId String
+  isPrimary  Boolean         @default(false)
+  category   ServiceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  worker     Worker          @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@unique([workerId, categoryId])
+  @@index([categoryId])
+}
+
+/// Simple recurring weekly availability block, e.g. dayOfWeek=6 (Saturday)
+/// 9-18 — enough to power the "live availability" search filter without
+/// needing the full booking-calendar engine (that's a separate feature).
+model AvailabilitySlot {
+  id        String @id @default(cuid())
+  workerId  String
+  dayOfWeek Int
+  startHour Int
+  endHour   Int
+  worker    Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@index([workerId])
+  @@index([dayOfWeek])
+}
+
+/// Every search is logged for analytics/audit and to demonstrate, at
+/// review time, how often the keyword engine vs. the optional AI path
+/// resolved a query.
+model SearchLog {
+  id                 String      @id @default(cuid())
+  queryText          String
+  detectedCategoryId String?
+  matchMethod        MatchMethod
+  matchConfidence    Float?
+  resultCount        Int
+  durationMs         Int
+  createdAt          DateTime    @default(now())
+  /// The area filter applied, if any — nullable because most historical
+  /// rows predate this column and plenty of searches don't filter by
+  /// area at all. Feeds the neighborhood demand heatmap (Module 2,
+  /// Feature 2): a zero-result search filtered to a specific area is a
+  /// soft "nobody here matched" signal, same idea as JobRequest but
+  /// automatic instead of requiring the customer to post anything. See
+  /// lib/opportunities/demandScore.ts.
+  area               DhakaArea?
+
+  @@index([createdAt])
+  @@index([detectedCategoryId])
+  @@index([area])
+}
+
+/// Tracks customer bookings and en-route technician status
+model Booking {
+  id                 String        @id @default(cuid())
+  customerId         String
+  customerPhone      String?
+  workerId           String?
+  status             BookingStatus @default(PENDING)
+  destinationLat     Float
+  destinationLng     Float
+  etaMinutes         Int?
+  tenMinuteAlertSent Boolean       @default(false)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  /// The rate both sides actually settled on (proposed or countered).
+  agreedRateBdt      Int?
+  /// Plaintext, short-lived, single-use, rate-limited on verification —
+  /// not a secret exchanged out-of-band, more a "this is genuinely the
+  /// accepted worker's own session confirming" checkpoint than a
+  /// cryptographic boundary. See docs/FEATURE_SPEC.md's booking-flow
+  /// notes for the full reasoning.
+  arrivalCode        String?
+  arrivalVerifiedAt  DateTime?
+  /// What the worker countered with, if they didn't just accept.
+  counterRateBdt     Int?
+  /// What the customer offered when requesting the booking.
+  proposedRateBdt    Int?
+  /// =====================================================================
+  /// MODULE 1 -> FEATURE 4 (Sudiptha): real booking request + rate
+  /// bargaining + arrival-code confirmation gate.
+  ///
+  /// `serviceAddress` is a snapshot of what the customer typed at
+  /// booking time (not a live join to User.address — they may be
+  /// booking for a different address than their saved default, and a
+  /// snapshot doesn't silently change if they edit their profile
+  /// later). Both stay null/hidden to the worker until
+  /// `arrivalVerifiedAt` is set — see app/api/bookings/[id]/route.ts.
+  /// =====================================================================
+  serviceAddress     String?
+  /// MODULE 2 -> FEATURE 1 (Shiva): when the worker first responded
+  /// (accept/reject/counter) to this request — powers the
+  /// Responsiveness trust-score metric. Distinct from `updatedAt`,
+  /// which keeps moving on every later step (verify-code, complete, a
+  /// counter-offer, ...) so it can't be reused for this.
+  respondedAt        DateTime?
+  /// When this booking's status actually became COMPLETED — the
+  /// review window (72h, see lib/trust/reviewEligibility.ts) is
+  /// measured from here, same reasoning as respondedAt above.
+  completedAt        DateTime?
+  review             Review?
+  /// MODULE 2 -> FEATURE 4 (Sudiptha): the WorkerJob financial-history row
+  /// created from this booking once it's marked COMPLETED, if any — see
+  /// lib/income/recordCompletedJob.ts.
+  workerJob          WorkerJob?
+
+  @@index([workerId])
+  @@index([customerId])
+}
+
+/// Emergency SOS requests within a 3km radius (Module 1 F3, Jishan).
+/// `alertedWorkerIds` is the snapshot of real Worker.id's the initial
+/// Haversine query found online/available within `radiusKm` at request
+/// time — whoever accepts first wins; the rest just stop showing it in
+/// their alert list. On accept, `acceptedWorkerId` and `bookingId` are
+/// set together (a real Booking is created so the same live-tracking
+/// map used for normal bookings takes over from there).
+model SosRequest {
+  id               String    @id @default(cuid())
+  customerId       String
+  customerPhone    String?
+  lat              Float
+  lng              Float
+  radiusKm         Float     @default(3.0)
+  alertedWorkerIds String[]
+  status           SosStatus @default(PENDING)
+  acceptedWorkerId String?
+  bookingId        String?
+  etaMinutes       Int?
+  acceptedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([customerId])
+  @@index([status])
+}
+
+/// Tier 1 — NID vs. selfie face match. `matchDistance` is a face
+/// descriptor distance from the client-side comparison (lower = more
+/// similar; ~<0.5 is a confident same-person match). A confident match
+/// auto-approves; anything less falls back to a coordinator's manual
+/// decision — the "automatic check" is a fast path, not the only path.
+model Tier1Verification {
+  id            String           @id @default(cuid())
+  workerId      String           @unique
+  nidImage      String
+  selfieImage   String
+  matchDistance Float?
+  autoApproved  Boolean          @default(false)
+  status        TierReviewStatus @default(PENDING)
+  reviewedById  String?
+  reviewNote    String?
+  submittedAt   DateTime         @default(now())
+  reviewedAt    DateTime?
+  reviewedBy    User?            @relation("Tier1Reviewer", fields: [reviewedById], references: [id])
+  worker        Worker           @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+}
+
+/// Tier 2 — physical skills test. Inherently a human, in-person
+/// evaluation (the spec is explicit it's judged "directly by platform
+/// coordinators") — the system only tracks the request/scheduling and
+/// records the coordinator's pass/fail decision, no automation.
+model Tier2SkillTest {
+  id                String           @id @default(cuid())
+  workerId          String           @unique
+  preferredSchedule String?
+  status            TierReviewStatus @default(PENDING)
+  evaluatedById     String?
+  evaluatorNote     String?
+  requestedAt       DateTime         @default(now())
+  evaluatedAt       DateTime?
+  evaluatedBy       User?            @relation("Tier2Evaluator", fields: [evaluatedById], references: [id])
+  worker            Worker           @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+}
+
+/// Tier 3 — police clearance document + reference checks. Also a
+/// human review process; coordinators mark each reference as
+/// contacted/verified alongside the document before deciding.
+model Tier3PoliceClearance {
+  id                String            @id @default(cuid())
+  workerId          String            @unique
+  clearanceDocument String
+  status            TierReviewStatus  @default(PENDING)
+  reviewedById      String?
+  reviewNote        String?
+  submittedAt       DateTime          @default(now())
+  reviewedAt        DateTime?
+  reviewedBy        User?             @relation("Tier3Reviewer", fields: [reviewedById], references: [id])
+  worker            Worker            @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  references        WorkerReference[]
+
+  @@index([status])
+}
+
+/// A previous-customer reference submitted alongside Tier 3. Contacting
+/// referees is a manual coordinator task the system tracks, not
+/// automates — there's no legitimate way to auto-verify a phone call.
+model WorkerReference {
+  id           String               @id @default(cuid())
+  tier3Id      String
+  name         String
+  phone        String
+  relationship String
+  contacted    Boolean              @default(false)
+  verified     Boolean              @default(false)
+  note         String?
+  tier3        Tier3PoliceClearance @relation(fields: [tier3Id], references: [id], onDelete: Cascade)
+
+  @@index([tier3Id])
+}
+
+// =====================================================================
+// OPEN JOB REQUESTS (Adri) — not one of the PDF's numbered features;
+// closes a gap the team found while building the real search/booking
+// flow (see docs/FEATURE_SPEC.md, "Core discovery & booking flow",
+// steps 7-8): today a search that matches no category just silently
+// shows every worker. This lets the customer post what they actually
+// need instead, and lets any number of interested workers apply — the
+// customer then picks exactly one, same shape as a real job posting.
+// =====================================================================
+
+model JobRequest {
+  id            String           @id @default(cuid())
+  customerId    String
+  customer      User             @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  description   String
+  area          DhakaArea
+  budgetMinBdt  Int?
+  budgetMaxBdt  Int?
+  status        JobRequestStatus @default(OPEN)
+  hiredWorkerId String?
+  hiredWorker   Worker?          @relation("HiredForJobRequest", fields: [hiredWorkerId], references: [id], onDelete: SetNull)
+  hiredAt       DateTime?
+  createdAt     DateTime         @default(now())
+
+  applications JobRequestApplication[]
+
+  @@index([status])
+  @@index([area])
+}
+
+/// A worker expressing interest in an OPEN request. Any number of
+/// workers can apply to the same one; the customer reviews applicants
+/// and hires exactly one via POST .../hire, which sets
+/// JobRequest.hiredWorkerId and flips status to HIRED. Application
+/// rows aren't deleted when that happens — "who else applied" stays
+/// visible, it's just no longer actionable once the job is HIRED.
+model JobRequestApplication {
+  id           String     @id @default(cuid())
+  jobRequestId String
+  jobRequest   JobRequest @relation(fields: [jobRequestId], references: [id], onDelete: Cascade)
+  workerId     String
+  worker       Worker     @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  appliedAt    DateTime   @default(now())
+
+  @@unique([jobRequestId, workerId])
+  @@index([jobRequestId])
+  @@index([workerId])
+}
+
+// =====================================================================
+// MODULE 2 -> FEATURE 1 (Shiva): AI TrustScore Engine + Review Fraud
+// Detection.
+//
+// A review is the customer's one-time verdict on a specific COMPLETED
+// booking — `bookingId` is @unique, one review per job, not one review
+// per worker. Eligibility (booking actually COMPLETED, within 72h of
+// completedAt, no existing review yet) is enforced in
+// lib/trust/reviewEligibility.ts, not just assumed client-side.
+//
+// Every submitted review is screened for fraud immediately (Groq if
+// GROQ_API_KEY is configured, otherwise the free local heuristic — see
+// lib/trust/fraudDetector.ts). A `fraudFlagged` review stays publicly
+// visible — a flag isn't proof, just a signal — but is excluded from
+// the trust score's rating/authenticity metrics and surfaced to admins
+// at app/admin/reviews, who can hide one they confirm is fake.
+// =====================================================================
+model Review {
+  id           String            @id @default(cuid())
+  bookingId    String            @unique
+  booking      Booking           @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  customerId   String
+  customer     User              @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  workerId     String
+  worker       Worker            @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  rating       Int
+  comment      String
+  /// Set by an admin after confirming a fraud flag — hidden reviews
+  /// stay in the database (nothing here is ever deleted) but drop out
+  /// of both the public list and every trust-score metric.
+  isHidden     Boolean           @default(false)
+  fraudFlagged Boolean           @default(false)
+  /// 0..1, higher = more likely fake. Null until the fraud check runs
+  /// (always synchronous on submit — see app/api/bookings/[id]/review).
+  fraudScore   Float?
+  fraudReason  String?
+  fraudMethod  FraudCheckMethod?
+  createdAt    DateTime          @default(now())
+
+  @@index([workerId])
+  @@index([fraudFlagged])
+}
+
+enum FraudCheckMethod {
+  AI
+  HEURISTIC
+}
+
+// =====================================================================
+// MODULE 2 -> FEATURE 4 (Sudiptha): Worker Income Intelligence Dashboard
+// + AI Predictive Planner.
+//
+// The worker-facing financial-history + business-coaching feature: a
+// real ledger of completed/paid work (WorkerJob), aggregated into
+// weekly/monthly/yearly earnings, peak hours, and top categories (see
+// lib/income/getIncomeMetrics.ts), then summarized and handed to a free
+// LLM (Groq, same free-APIs-only pattern as lib/ai/groqClient.ts and
+// lib/opportunities/opportunityInsight.ts — never OpenAI, per
+// docs/FEATURE_SPEC.md's documented stack constraint) for a short
+// business suggestion + localized demand forecast, cached in
+// WorkerAnalytics.
+// =====================================================================
+
+/// One completed, paid unit of work for a worker — the sole source of
+/// truth for the Income Intelligence dashboard. Only ever created in one
+/// place for real bookings (app/api/bookings/[id]/complete/route.ts, the
+/// moment a booking's status becomes COMPLETED) — never on booking
+/// creation or any other status change. `bookingId` is nullable+unique
+/// so a real completed booking maps to at most one WorkerJob, while
+/// prisma/seedWorkerIncomeDemo.ts can insert additional demo rows with no
+/// booking behind them at all (clearly a seed script, not disguised as
+/// something else — see that file's own comment). `categoryId` is
+/// best-effort: `Booking` itself never captured which service category a
+/// job was for, so a real completed booking's category is inferred from
+/// the worker's own primary listed category at completion time — see
+/// lib/income/recordCompletedJob.ts for the exact fallback order.
+model WorkerJob {
+  id          String           @id @default(cuid())
+  workerId    String
+  worker      Worker           @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  bookingId   String?          @unique
+  booking     Booking?         @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  categoryId  String?
+  category    ServiceCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  /// Free-text label shown on the dashboard (e.g. "Electrical Repair") —
+  /// deliberately more specific than the category name alone, same
+  /// reasoning as Booking.serviceAddress being a point-in-time snapshot.
+  jobType     String
+  amountBdt   Int
+  completedAt DateTime
+  createdAt   DateTime         @default(now())
+
+  @@index([workerId])
+  @@index([workerId, completedAt])
+  @@index([categoryId])
+}
+
+/// A cached snapshot of computed income metrics + AI-generated coaching
+/// for one worker/range/period — doubles as the "Coaching History" log.
+/// Reused (not regenerated) whenever the same period is requested again
+/// with an unchanged `jobsCompleted` count — see
+/// lib/income/workerAnalyticsCache.ts. `source` records which path
+/// produced `suggestionText`/`demandForecastText`: "AI" (Groq answered)
+/// or "HEURISTIC" (deterministic fallback — missing key, timeout, or any
+/// Groq failure, same never-throws contract as the rest of the app's AI
+/// integrations).
+model WorkerAnalytics {
+  id                 String      @id @default(cuid())
+  workerId           String
+  worker             Worker      @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  range              IncomeRange
+  /// Start of the aggregation period (start of the ISO week / calendar
+  /// month / calendar year this snapshot covers) — together with
+  /// workerId/range, uniquely identifies "the coaching for this period".
+  periodStart        DateTime
+  totalEarningsBdt   Int
+  avgJobValueBdt     Int
+  jobsCompleted      Int
+  /// e.g. "6 PM – 7 PM", or null when there's no completed-job data yet.
+  peakLabel          String?
+  topCategoryLabel   String?
+  suggestionText     String?
+  demandForecastText String?
+  source             String
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  @@unique([workerId, range, periodStart])
+  @@index([workerId])
+}
+
+enum IncomeRange {
+  WEEK
+  MONTH
+  YEAR
+}
+
+// =====================================================================
+// MODULE 3 (Sudiptha): Spare Parts E-Commerce Shop.
+//
+// A parts catalog (`/shop`) + order history for workers restocking
+// supplies. `OrderItem.itemName`/`unitPrice`/`subtotal` are a snapshot
+// captured at purchase time, not derived live from `Item` — a later
+// price/name change on the catalog never rewrites a past order's
+// total. Integer autoincrement ids and `Decimal` money fields (unlike
+// the cuid()/Float convention elsewhere in this schema) and
+// `Order.workerId` pointing at `User.id` rather than `Worker.id` are
+// kept exactly as applied rather than reshaped — this already matches
+// the live database (migration: add_spare_parts_store). See
+// docs/SPARE_PARTS_FEATURE.md.
+// =====================================================================
+model Item {
+  id         Int         @id @default(autoincrement())
+  name       String
+  pictureUrl String?
+  useCase    String
+  price      Decimal     @db.Decimal(10, 2)
+  stockQty   Int         @default(0)
+  workType   String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  orderItems OrderItem[]
+
+  @@index([workType])
+  @@index([stockQty])
+}
+
+/// One checkout by a worker. `jobId` is a free-text reference to the
+/// job it was bought for — no JobRequest/Booking foreign key, not
+/// enforced, same "loose reference" the original migration shipped
+/// with.
+model Order {
+  id          Int         @id @default(autoincrement())
+  workerId    String
+  worker      User        @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  jobId       String?
+  totalAmount Decimal     @db.Decimal(10, 2)
+  createdAt   DateTime    @default(now())
+  items       OrderItem[]
+  /// =====================================================================
+  /// MODULE 3 (Shiva): SSLCommerz sandbox payment integration for the
+  /// Spare Parts Shop checkout.
+  ///
+  /// PENDING the moment the order+items are written (see
+  /// app/api/shop/orders/route.ts), flipped to PAID/FAILED/CANCELLED by
+  /// whichever of the gateway's callbacks lands first (success/fail/
+  /// cancel redirect or the IPN — see app/api/shop/payment/*). `tranId`
+  /// is what ties this row back to the gateway session; `valId` is only
+  /// set once SSLCommerz's own validation API has actually confirmed the
+  /// transaction server-side — the browser redirect alone is never
+  /// trusted on its own. See lib/payments/sslcommerz.ts for why this is
+  /// optional/graceful-fallback, same free-APIs-only pattern as Groq.
+  /// =====================================================================
+  paymentStatus PaymentStatus @default(PENDING)
+  tranId        String        @unique
+  valId         String?
+  cardType      String?
+  paidAt        DateTime?
+
+  @@index([workerId])
+  @@index([jobId])
+  @@index([createdAt])
+  @@index([paymentStatus])
+}
+
+model OrderItem {
+  id        Int     @id @default(autoincrement())
+  orderId   Int
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  itemId    Int
+  item      Item    @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  itemName  String
+  quantity  Int
+  unitPrice Decimal @db.Decimal(10, 2)
+  subtotal  Decimal @db.Decimal(10, 2)
+
+  @@index([orderId])
+  @@index([itemId])
+}
+
+enum Role {
+  CUSTOMER
+  WORKER
+  CORPORATE
+  ADMIN
+}
+
+/// MODULE 3 (Shiva): Spare Parts Shop checkout payment status — see the
+/// banner comment above Order.paymentStatus.
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  CANCELLED
+}
+
+/// Three-tier trust badge from the Worker Verification feature (Module 1
+/// Feature 1). Stored here because search results are ranked by it.
+enum VerificationTier {
+  UNVERIFIED
+  TIER1_ID_VERIFIED
+  TIER2_SKILL_TESTED
+  TIER3_POLICE_CLEARED
+}
+
+/// Service areas the platform currently covers. Kept as an enum (rather
+/// than a free-text field) so filtering/indexing stays fast and clean.
+enum DhakaArea {
+  GULSHAN
+  BANANI
+  BARIDHARA
+  DHANMONDI
+  UTTARA
+  MIRPUR
+  MOHAMMADPUR
+  BASHUNDHARA
+  BADDA
+  RAMPURA
+  MOTIJHEEL
+  OLD_DHAKA
+  WARI
+  LALMATIA
+  FARMGATE
+  TEJGAON
+  KHILGAON
+  MALIBAGH
+  JATRABARI
+  MOHAKHALI
+  BANASREE
+  SAVAR
+}
+
+/// How a search query was mapped to a category — lets us prove, and
+/// measure, that the free keyword engine is doing most of the work and
+/// the paid-tier-free LLM path is only used when explicitly enabled.
+enum MatchMethod {
+  KEYWORD
+  AI
+  MANUAL_FILTER
+}
+
+enum BookingStatus {
+  PENDING
+  IN_TRANSIT
+  /// Also reused as "arrival code verified" for the real booking flow —
+  /// see Booking.arrivalVerifiedAt.
+  ARRIVED
+  COMPLETED
+  CANCELLED
+  /// Customer requested this worker at a proposed rate; worker hasn't
+  /// responded yet. Module 1 F4 (Sudiptha).
+  PENDING_ACCEPTANCE
+  /// Worker accepted (at the proposed or countered rate) — the arrival
+  /// code is live, address/phone are still withheld until it's verified.
+  CONFIRMED
+  /// Worker declined the request outright.
+  REJECTED
+}
+
+enum SosStatus {
+  PENDING
+  ACCEPTED
+  CANCELLED
+  EXPIRED
+}
+
+/// =====================================================================
+/// MODULE 1 -> FEATURE 1 (Shiva): Multi-Layer Worker Verification &
+/// Digital Badge System.
+///
+/// One row per worker per tier (not a history log) — a tier is either
+/// not started (no row), awaiting a decision (PENDING), or decided
+/// (APPROVED/REJECTED, re-submittable after rejection by overwriting
+/// the same row). Approving a tier bumps Worker.verificationTier,
+/// which is what the existing search feature already ranks and filters
+/// on (see lib/search/buildWorkerQuery.ts) — this feature never
+/// duplicates that ranking logic, only feeds it.
+/// =====================================================================
+enum TierReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum JobRequestStatus {
+  OPEN
+  HIRED
+}
