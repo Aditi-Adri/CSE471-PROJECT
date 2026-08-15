@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { DHAKA_AREAS, AREA_LABEL_BY_VALUE } from "@/lib/constants/dhakaAreas";
 import { formatBdt } from "@/lib/format";
@@ -36,18 +37,31 @@ function formatBudget(minBdt: number | null, maxBdt: number | null): string | nu
  *
  * Pre-fills the area filter from `?area=` if present — how the
  * opportunities heatmap's "Browse jobs here" links land you already
- * filtered instead of on the unfiltered full list. Read directly off
- * `window.location` (not `useSearchParams`) so this stays a plain
- * client component with no Suspense-boundary requirement on the page.
+ * filtered instead of on the unfiltered full list. The URL is the one
+ * source of truth for the filter (not local state mirroring it):
+ * clicking from one area's heatmap link to another's is a client-side
+ * navigation on the *same* route, so the component doesn't remount —
+ * a `useState` initialized once from the URL would only ever pick up
+ * the very first area you clicked and silently keep filtering by that
+ * one forever after. Reading `area` straight from `useSearchParams`
+ * on every render avoids that entirely; the dropdown updates the URL
+ * (via `router.replace`) instead of a separate state variable.
  */
 export function JobRequestsList() {
-  const [area, setArea] = useState(() => {
-    if (typeof window === "undefined") return "";
-    return new URLSearchParams(window.location.search).get("area") ?? "";
-  });
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const area = searchParams.get("area") ?? "";
+
   const [requests, setRequests] = useState<JobRequestItem[] | null>(null);
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  function setArea(newArea: string) {
+    const params = new URLSearchParams(searchParams);
+    if (newArea) params.set("area", newArea);
+    else params.delete("area");
+    router.replace(`/dashboard/job-requests?${params.toString()}`, { scroll: false });
+  }
 
   function refetch() {
     const url = area ? `/api/job-requests?area=${area}` : "/api/job-requests";
