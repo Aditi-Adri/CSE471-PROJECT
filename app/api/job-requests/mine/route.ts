@@ -47,10 +47,31 @@ export const GET = withErrorHandling(async () => {
       hiredWorker: { select: applicantWorkerSelect },
       applications: {
         orderBy: { appliedAt: "asc" },
-        select: { id: true, appliedAt: true, worker: { select: applicantWorkerSelect } },
+        select: { id: true, wageBdt: true, appliedAt: true, worker: { select: applicantWorkerSelect } },
+      },
+      // Once hired, the customer's bill = the hired worker's wage +
+      // whatever parts they bought for this job.
+      partOrders: {
+        select: { items: { select: { quantity: true, price: true } } },
       },
     },
   });
 
-  return Response.json({ requests });
+  const shaped = requests.map(({ partOrders, applications, ...r }) => {
+    const partsTotalBdt = partOrders
+      .flatMap((o) => o.items)
+      .reduce((sum, item) => sum + item.quantity * item.price, 0);
+    const hiredApplication = applications.find((a) => a.worker.id === r.hiredWorker?.id);
+    const wageBdt = hiredApplication?.wageBdt ?? null;
+
+    return {
+      ...r,
+      applications,
+      partsTotalBdt,
+      wageBdt,
+      totalBillBdt: wageBdt !== null ? wageBdt + partsTotalBdt : null,
+    };
+  });
+
+  return Response.json({ requests: shaped });
 });
