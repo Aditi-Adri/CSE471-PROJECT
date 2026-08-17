@@ -137,21 +137,21 @@ below have no matching models yet. `Review` now exists (Feature 1).
 | 3 | Jishan | Dispute resolution + escrow settlement (needs a payment gateway). Now has something real to attach to — `Booking.status` reaches `COMPLETED` for real | 🔴 Not built | — |
 | 4 | Sudiptha | Worker income intelligence dashboard + AI predictive planner (Groq). Now has real `agreedRateBdt`/`COMPLETED` bookings to aggregate | 🔴 Not built | — |
 
-## Module 3: Marketplace Monetization, Communication & Automated Ops — 🔴 none built yet
+## Module 3: Marketplace Monetization, Communication & Automated Ops — 🟡 partially started
 
 PDF lists 2 features per member here (numbering in the source PDF repeats 1–4 twice —
 this is that second pass).
 
-| Owner | Feature |
-|---|---|
-| Shiva | Worker SaaS subscription paid from in-app wallet balance → premium search ranking flag |
-| Shiva | Real-time job chat + notifications via Socket.IO. `server.ts` already runs a Socket.IO server for tracking — extend it, don't start a second one |
-| Adri | Spare parts e-commerce shop + inventory margin manager (catalog, markup, escrow-bill append, stock decrement) |
-| Adri | Admin verification lifecycle queue + ban enforcement — **extends** `app/admin/verifications`; read that first, don't duplicate |
-| Jishan | Platform financial analytics + commission ledger dashboard (job commissions + subscriptions + parts margin, by district) |
-| Jishan | Corporate multi-property subscription portal (B2B, recurring checks, caretaker permissions, aggregated billing) |
-| Sudiptha | Automated escrow expiry + wallet payout pipeline — hourly `node-cron` job, 48h no-dispute auto-release minus commission. Needs `node-cron` added to `package.json`. Now has a real `ARRIVED`→`COMPLETED` transition to hang the timeout off of |
-| Sudiptha | Dynamic multi-tier subscription plan selector (Silver/Gold radius tiers) driven by a `SubscriptionTiers` table |
+| Owner | Feature | Status | Files |
+|---|---|---|---|
+| Shiva | Worker SaaS subscription paid from in-app wallet balance → premium search ranking flag | 🔴 Not built | — |
+| Shiva | Real-time job chat + notifications via Socket.IO. `server.ts` already runs a Socket.IO server for tracking — extend it, don't start a second one | 🔴 Not built | — |
+| Adri | Spare parts e-commerce shop + inventory margin manager (catalog, markup, escrow-bill append, stock decrement) | 🟡 Partial — built the escrow-bill-append half on top of the existing Job Requests flow (not Sudiptha's shop/Item/Order — separate models, see below); markup/margin isn't in yet, `Part.price` is a single sell price | `JobRequestApplication.wageBdt` (worker states a price when applying, customer picks based on it), models `Part`/`PartOrder`/`PartOrderItem` (own catalog + order, tied to a real `JobRequest` via a real foreign key — not free text like `Order.jobId`). `POST /api/job-requests/[id]/apply` (now needs a wage), `GET /api/parts`, `POST /api/job-requests/[id]/parts` (hired worker buys parts, stock decrements in a transaction, only the actual hired worker can buy on that job). `mine`/`my-applications` both return `wageBdt` + `partsTotalBdt` + `totalBillBdt` — the combined bill the customer pays. `components/jobRequests/BuyPartsForm.tsx`. Seed: `prisma/seedParts.ts` |
+| Adri | Admin verification lifecycle queue + ban enforcement — **extends** `app/admin/verifications`; read that first, don't duplicate | 🔴 Not built | — |
+| Jishan | Platform financial analytics + commission ledger dashboard (job commissions + subscriptions + parts margin, by district) | 🔴 Not built | — |
+| Jishan | Corporate multi-property subscription portal (B2B, recurring checks, caretaker permissions, aggregated billing) | 🔴 Not built | — |
+| Sudiptha | Automated escrow expiry + wallet payout pipeline — hourly `node-cron` job, 48h no-dispute auto-release minus commission. Needs `node-cron` added to `package.json`. Now has a real `ARRIVED`→`COMPLETED` transition to hang the timeout off of | 🔴 Not built | — |
+| Sudiptha | Dynamic multi-tier subscription plan selector (Silver/Gold radius tiers) driven by a `SubscriptionTiers` table | 🔴 Not built | — |
 
 ## How to use this doc when asked to "build module X feature Y"
 

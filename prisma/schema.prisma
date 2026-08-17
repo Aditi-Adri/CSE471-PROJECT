@@ -190,6 +190,7 @@ model Worker {
   /// JobRequestApplication below.
   hiredJobRequests       JobRequest[]            @relation("HiredForJobRequest")
   jobRequestApplications JobRequestApplication[]
+  partOrders             PartOrder[]
   tier1Verification      Tier1Verification?
   tier2SkillTest         Tier2SkillTest?
   tier3PoliceClearance   Tier3PoliceClearance?
@@ -442,6 +443,7 @@ model JobRequest {
   createdAt     DateTime         @default(now())
 
   applications JobRequestApplication[]
+  partOrders   PartOrder[]
 
   @@index([status])
   @@index([area])
@@ -459,11 +461,57 @@ model JobRequestApplication {
   jobRequest   JobRequest @relation(fields: [jobRequestId], references: [id], onDelete: Cascade)
   workerId     String
   worker       Worker     @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  /// The wage the worker is asking for this job. Shown to the customer
+  /// when picking who to hire.
+  wageBdt      Int
   appliedAt    DateTime   @default(now())
 
   @@unique([jobRequestId, workerId])
   @@index([jobRequestId])
   @@index([workerId])
+}
+
+// =====================================================================
+// MODULE 3 (Adri): worker buys spare parts for a job they're hired on.
+// Own simple models, separate from Sudiptha's shop (Item/Order) - a
+// PartOrder is always tied to a real JobRequest, and its cost gets
+// added to that job's bill instead of the worker paying for it via a
+// separate checkout.
+// =====================================================================
+
+model Part {
+  id         String          @id @default(cuid())
+  name       String
+  price      Int
+  stockQty   Int             @default(0)
+  orderItems PartOrderItem[]
+}
+
+/// One "buy parts for this job" trip by the hired worker.
+model PartOrder {
+  id           String          @id @default(cuid())
+  jobRequestId String
+  jobRequest   JobRequest      @relation(fields: [jobRequestId], references: [id], onDelete: Cascade)
+  workerId     String
+  worker       Worker          @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  createdAt    DateTime        @default(now())
+  items        PartOrderItem[]
+
+  @@index([jobRequestId])
+}
+
+model PartOrderItem {
+  id          String    @id @default(cuid())
+  partOrderId String
+  partOrder   PartOrder @relation(fields: [partOrderId], references: [id], onDelete: Cascade)
+  partId      String
+  part        Part      @relation(fields: [partId], references: [id], onDelete: Restrict)
+  quantity    Int
+  /// Price at the time it was bought - Part.price can change later,
+  /// this keeps the bill accurate to what was actually charged.
+  price       Int
+
+  @@index([partOrderId])
 }
 
 // =====================================================================
@@ -549,13 +597,13 @@ model Item {
 /// enforced, same "loose reference" the original migration shipped
 /// with.
 model Order {
-  id          Int         @id @default(autoincrement())
-  workerId    String
-  worker      User        @relation(fields: [workerId], references: [id], onDelete: Cascade)
-  jobId       String?
-  totalAmount Decimal     @db.Decimal(10, 2)
-  createdAt   DateTime    @default(now())
-  items       OrderItem[]
+  id            Int           @id @default(autoincrement())
+  workerId      String
+  worker        User          @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  jobId         String?
+  totalAmount   Decimal       @db.Decimal(10, 2)
+  createdAt     DateTime      @default(now())
+  items         OrderItem[]
   /// =====================================================================
   /// MODULE 3 (Shiva): SSLCommerz sandbox payment integration for the
   /// Spare Parts Shop checkout.

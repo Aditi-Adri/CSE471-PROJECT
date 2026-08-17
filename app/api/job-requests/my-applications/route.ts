@@ -34,6 +34,7 @@ export const GET = withErrorHandling(async () => {
     orderBy: { appliedAt: "desc" },
     select: {
       id: true,
+      wageBdt: true,
       appliedAt: true,
       jobRequest: {
         select: {
@@ -47,6 +48,10 @@ export const GET = withErrorHandling(async () => {
           hiredWorkerId: true,
           hiredAt: true,
           customer: { select: { name: true, phone: true } },
+          partOrders: {
+            where: { workerId: worker.id },
+            select: { items: { select: { quantity: true, price: true } } },
+          },
         },
       },
     },
@@ -54,6 +59,10 @@ export const GET = withErrorHandling(async () => {
 
   const shaped = applications.map(({ jobRequest, ...application }) => {
     const hired = jobRequest.hiredWorkerId === worker.id;
+    const partsTotalBdt = jobRequest.partOrders
+      .flatMap((o) => o.items)
+      .reduce((sum, item) => sum + item.quantity * item.price, 0);
+
     return {
       ...application,
       jobRequest: {
@@ -70,6 +79,8 @@ export const GET = withErrorHandling(async () => {
         // everyone else who applied just sees the request went to
         // someone else, not who or how to reach them.
         customer: hired ? jobRequest.customer : null,
+        partsTotalBdt,
+        totalBillBdt: application.wageBdt + partsTotalBdt,
       },
     };
   });

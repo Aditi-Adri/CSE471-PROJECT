@@ -22,6 +22,7 @@ type ApplicantWorker = {
 
 type Application = {
   id: string;
+  wageBdt: number;
   appliedAt: string;
   worker: ApplicantWorker;
 };
@@ -37,6 +38,9 @@ type MyRequestItem = {
   hiredAt: string | null;
   hiredWorker: ApplicantWorker | null;
   applications: Application[];
+  wageBdt: number | null;
+  partsTotalBdt: number;
+  totalBillBdt: number | null;
 };
 
 function WorkerSummary({ worker }: { worker: ApplicantWorker }) {
@@ -144,14 +148,23 @@ export function MyRequestsList() {
           </div>
 
           {r.status === "HIRED" && r.hiredWorker && (
-            <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 dark:border-emerald-900 dark:bg-emerald-950/20">
-              <WorkerSummary worker={r.hiredWorker} />
-              <Link
-                href={`/workers/${r.hiredWorker.id}`}
-                className="shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700"
-              >
-                View profile
-              </Link>
+            <div className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 dark:border-emerald-900 dark:bg-emerald-950/20">
+              <div className="flex items-center gap-3">
+                <WorkerSummary worker={r.hiredWorker} />
+                <Link
+                  href={`/workers/${r.hiredWorker.id}`}
+                  className="shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700"
+                >
+                  View profile
+                </Link>
+              </div>
+              {r.totalBillBdt !== null && (
+                <div className="text-xs text-zinc-600 dark:text-zinc-300">
+                  <p>Wage: {formatBdt(r.wageBdt ?? 0)}</p>
+                  {r.partsTotalBdt > 0 && <p>Parts bought: {formatBdt(r.partsTotalBdt)}</p>}
+                  <p className="font-semibold">Total to pay: {formatBdt(r.totalBillBdt)}</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -171,6 +184,9 @@ export function MyRequestsList() {
                   >
                     <WorkerSummary worker={app.worker} />
                     <div className="flex shrink-0 items-center gap-2">
+                      <span className="text-xs font-medium text-zinc-700 dark:text-zinc-200">
+                        {formatBdt(app.wageBdt)}
+                      </span>
                       <Link
                         href={`/workers/${app.worker.id}`}
                         className="text-xs font-medium text-brand-700 hover:underline dark:text-brand-400"

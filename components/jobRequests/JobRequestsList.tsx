@@ -55,6 +55,8 @@ export function JobRequestsList() {
   const [requests, setRequests] = useState<JobRequestItem[] | null>(null);
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  // What each worker typed in the wage box, keyed by request id.
+  const [wageInputs, setWageInputs] = useState<Record<string, string>>({});
 
   function setArea(newArea: string) {
     const params = new URLSearchParams(searchParams);
@@ -73,11 +75,21 @@ export function JobRequestsList() {
 
   useEffect(refetch, [area]);
 
+  // Worker applies to one job request with a wage.
   async function handleApply(id: string) {
+    const wageBdt = Number(wageInputs[id]);
+    if (!wageBdt || wageBdt <= 0) {
+      setMessage("Enter a wage first.");
+      return;
+    }
     setApplyingId(id);
     setMessage(null);
     try {
-      const res = await fetch(`/api/job-requests/${id}/apply`, { method: "POST" });
+      const res = await fetch(`/api/job-requests/${id}/apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wageBdt }),
+      });
       if (res.ok) {
         setMessage("Applied — see /dashboard/my-applications once the customer picks someone.");
         refetch();
@@ -137,14 +149,24 @@ export function JobRequestsList() {
                   Applied ✓
                 </button>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => handleApply(r.id)}
-                  disabled={applyingId === r.id}
-                  className={`${primaryButtonClasses} mt-1 self-start px-4 py-2`}
-                >
-                  {applyingId === r.id ? "Applying…" : "Apply for this job"}
-                </button>
+                <div className="mt-1 flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    placeholder="Your wage (BDT)"
+                    value={wageInputs[r.id] ?? ""}
+                    onChange={(e) => setWageInputs({ ...wageInputs, [r.id]: e.target.value })}
+                    className={`${inputClasses} w-40`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleApply(r.id)}
+                    disabled={applyingId === r.id}
+                    className={`${primaryButtonClasses} mt-0 px-4 py-2`}
+                  >
+                    {applyingId === r.id ? "Applying…" : "Apply for this job"}
+                  </button>
+                </div>
               )}
             </div>
           ))}

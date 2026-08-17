@@ -1,18 +1,20 @@
 import { getServerSession } from "next-auth";
+import { z } from "zod";
 import { authOptions } from "@/lib/auth/authOptions";
 import { prisma } from "@/lib/db";
+import { applyToJobSchema } from "@/lib/validation/jobRequestSchema";
 import { checkRateLimit, getClientIp } from "@/lib/auth/rateLimit";
 import { withErrorHandling } from "@/lib/api/withErrorHandling";
 
 /**
  * POST /api/job-requests/[id]/apply
+ * body: { wageBdt }
  *
- * A worker expressing interest in an OPEN request — "I'll take this."
- * Replaces the old single-claim PATCH: any number of workers can apply
- * to the same request now, so this only ever creates a
- * JobRequestApplication row. Nothing about the request itself changes
- * (still OPEN, still visible to every other worker) until the customer
- * hires someone via POST .../hire.
+ * A worker expressing interest in an OPEN request, with the wage
+ * they're asking for. Any number of workers can apply to the same
+ * request — this just adds a JobRequestApplication row, the request
+ * itself stays OPEN and visible until the customer hires someone via
+ * POST .../hire.
  */
 export const POST = withErrorHandling(async (request: Request, { params }: { params: Promise<{ id: string }> }) => {
   const session = await getServerSession(authOptions);
@@ -34,6 +36,15 @@ export const POST = withErrorHandling(async (request: Request, { params }: { par
     return Response.json({ error: "Only workers can apply to requests." }, { status: 403 });
   }
 
+  const body = await request.json().catch(() => null);
+  const parsed = applyToJobSchema.safeParse(body);
+  if (!parsed.success) {
+    return Response.json(
+      { error: "Invalid request.", issues: z.treeifyError(parsed.error) },
+      { status: 400 }
+    );
+  }
+
   const { id } = await params;
 
   const jobRequest = await prisma.jobRequest.findUnique({
@@ -49,7 +60,7 @@ export const POST = withErrorHandling(async (request: Request, { params }: { par
 
   try {
     await prisma.jobRequestApplication.create({
-      data: { jobRequestId: id, workerId: worker.id },
+      data: { jobRequestId: id, workerId: worker.id, wageBdt: parsed.data.wageBdt },
     });
   } catch (err) {
     // Unique constraint on [jobRequestId, workerId] — already applied.
