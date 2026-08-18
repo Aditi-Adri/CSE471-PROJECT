@@ -37,6 +37,8 @@ model User {
   /// before — see docs/FEATURE_SPEC.md's booking-flow section.
   address             String?
   accounts            Account[]
+  /// Workers this customer has starred - see Favorite below.
+  favorites           Favorite[]
   /// Requests this user posted when a search came up with no matching
   /// category — see JobRequest below.
   jobRequests         JobRequest[]
@@ -191,6 +193,7 @@ model Worker {
   hiredJobRequests       JobRequest[]            @relation("HiredForJobRequest")
   jobRequestApplications JobRequestApplication[]
   partOrders             PartOrder[]
+  favoritedBy            Favorite[]
   tier1Verification      Tier1Verification?
   tier2SkillTest         Tier2SkillTest?
   tier3PoliceClearance   Tier3PoliceClearance?
@@ -512,6 +515,21 @@ model PartOrderItem {
   price       Int
 
   @@index([partOrderId])
+}
+
+/// MODULE 4 (Adri): a customer starring a worker to rebook later, no
+/// search needed. Just a join between User and Worker - unique so the
+/// same worker can't be starred twice by the same customer.
+model Favorite {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   User     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  workerId   String
+  worker     Worker   @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([customerId, workerId])
+  @@index([customerId])
 }
 
 // =====================================================================
