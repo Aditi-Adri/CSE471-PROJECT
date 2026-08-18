@@ -6,6 +6,7 @@ import {
   MessageIcon,
   ShieldCheckIcon,
   SirenIcon,
+  StarIcon,
   WrenchIcon,
 } from "@/components/marketing/icons";
 import type { Role } from "@/app/generated/prisma/client";
@@ -53,6 +54,12 @@ function getQuickLinks(role: Role, hasWorkerProfile: boolean): QuickLink[] {
           title: "Emergency SOS",
           description: "One tap alerts every verified technician online within 3km of you.",
           icon: SirenIcon,
+        },
+        {
+          href: "/dashboard/favorites",
+          title: "My favorites",
+          description: "Workers you've saved — book them again without searching.",
+          icon: StarIcon,
         },
       ];
 

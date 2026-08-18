@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth/authOptions";
 import { prisma } from "@/lib/db";
 import { Avatar } from "@/components/search/Avatar";
 import { VerificationBadge } from "@/components/search/VerificationBadge";
@@ -10,6 +12,7 @@ import { formatRateRange, pluralize } from "@/lib/format";
 import { TrustScoreBadge } from "@/components/trust/TrustScoreBadge";
 import { TrustScoreDetails } from "@/components/trust/TrustScoreDetails";
 import { ReviewList } from "@/components/reviews/ReviewList";
+import { FavoriteButton } from "@/components/favorites/FavoriteButton";
 import { getTrustBreakdown } from "@/lib/trust/recomputeTrustScore";
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -54,6 +57,18 @@ export default async function WorkerProfilePage({
   if (!worker) notFound();
   const trustBreakdown = await getTrustBreakdown(worker.id);
 
+  // Only customers can favorite a worker - check who's looking and
+  // whether they've already starred this one.
+  const session = await getServerSession(authOptions);
+  const isCustomer = session?.user?.role === "CUSTOMER" || session?.user?.role === "CORPORATE";
+  let alreadyFavorited = false;
+  if (isCustomer && session?.user?.id) {
+    const favorite = await prisma.favorite.findUnique({
+      where: { customerId_workerId: { customerId: session.user.id, workerId: worker.id } },
+    });
+    alreadyFavorited = favorite !== null;
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-10 sm:px-6 lg:px-8">
       <Link href="/search" className="text-sm text-zinc-500 transition hover:text-brand-700 dark:hover:text-brand-400">
@@ -73,6 +88,7 @@ export default async function WorkerProfilePage({
                   <span className="h-1.5 w-1.5 rounded-full bg-green-500" /> Available now
                 </span>
               )}
+              {isCustomer && <FavoriteButton workerId={worker.id} initialFavorited={alreadyFavorited} />}
             </div>
             <p className="text-zinc-600 dark:text-zinc-400">{worker.headline}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
