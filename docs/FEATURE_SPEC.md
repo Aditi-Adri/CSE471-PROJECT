@@ -153,6 +153,16 @@ this is that second pass).
 | Sudiptha | Automated escrow expiry + wallet payout pipeline — hourly `node-cron` job, 48h no-dispute auto-release minus commission. Needs `node-cron` added to `package.json`. Now has a real `ARRIVED`→`COMPLETED` transition to hang the timeout off of | 🔴 Not built | — |
 | Sudiptha | Dynamic multi-tier subscription plan selector (Silver/Gold radius tiers) driven by a `SubscriptionTiers` table | 🔴 Not built | — |
 
+## Module 4 — not in the PDF; Adri's own addition
+
+Not one of the PDF's numbered features — a small, self-contained extra rather than
+something assigned. Simple by design, not meant to carry the same weight as the
+Module 1/2/3 rows above.
+
+| Owner | Feature | Status | Files |
+|---|---|---|---|
+| Adri | Favorite workers — customer stars a worker to rebook later without searching again | ✅ Built | Model `Favorite` (`customerId`, `workerId`, unique together). `POST /api/favorites/[workerId]` toggles star on/off, `GET /api/favorites` lists them. `components/favorites/FavoriteButton.tsx` on `app/workers/[id]/page.tsx` (customers only), `components/favorites/FavoritesList.tsx` on `/dashboard/favorites` |
+
 ## How to use this doc when asked to "build module X feature Y"
 
 1. Find the row above for owner, status, and existing files.
