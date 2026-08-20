@@ -4,31 +4,14 @@ import { AREA_LABEL_BY_VALUE } from "@/lib/constants/dhakaAreas";
 import { bucketByNearestArea, computeShortageScore, filterPlausibleLocations, RECENT_DAYS } from "./demandScoreMath";
 import type { DhakaArea } from "@/app/generated/prisma/client";
 
-/**
- * Neighborhood demand heatmap (Adri, Module 2 Feature 2 — see
- * docs/FEATURE_SPEC.md). Powers /dashboard/opportunities: "which areas
- * need workers most right now."
- *
- * Every input here is a real row already written by some other part of
- * the app — nothing is fabricated for the demo:
- *
- *   - JobRequest (status OPEN): a search matched no category and the
- *     customer posted what they need — the most direct "nobody's here
- *     for this" signal there is, and it's already area-tagged.
- *   - Booking: a real booking request, wherever it ended up — mapped to
- *     its nearest neighborhood centroid via destinationLat/Lng (no
- *     stored area column on Booking itself).
- *   - SosRequest: urgent, geographically precise demand.
- *   - SearchLog (resultCount 0, area set): a customer filtered to a
- *     specific area and found nobody — a softer, automatic version of
- *     JobRequest that doesn't require the customer to post anything.
- *   - Worker (isAvailableNow): the supply side.
- *
- * The actual weighting/scoring math lives in demandScoreMath.ts, kept
- * free of any `@/lib/db` import so it has a unit test that runs with
- * no database or env setup — this file is just the part that fetches
- * real rows and calls it.
- */
+// Neighborhood demand heatmap: works out which Dhaka areas need
+// workers most right now, using real rows already in the database:
+//   - JobRequest (OPEN): a customer posted what they need directly.
+//   - Booking: mapped to the nearest area using its lat/lng.
+//   - SosRequest: urgent demand, also mapped by lat/lng.
+//   - SearchLog (0 results, area set): a search that found nobody.
+//   - Worker (isAvailableNow): the supply side.
+// The scoring formula itself lives in demandScoreMath.ts.
 
 export type OpportunityArea = {
   area: DhakaArea;
@@ -73,29 +56,55 @@ export async function getOpportunityAreas(): Promise<OpportunityArea[]> {
       }),
     ]);
 
-  const bookingsByArea = bucketByNearestArea(
-    filterPlausibleLocations(recentBookings.map((b) => ({ lat: b.destinationLat, lng: b.destinationLng })))
-  );
-  const sosByArea = bucketByNearestArea(
-    filterPlausibleLocations(recentSosRequests.map((s) => ({ lat: s.lat, lng: s.lng })))
-  );
+  // Build the list of booking/SOS points, then bucket each list by
+  // whichever area it's closest to.
+  const bookingPoints = [];
+  for (const booking of recentBookings) {
+    bookingPoints.push({ lat: booking.destinationLat, lng: booking.destinationLng });
+  }
+  const sosPoints = [];
+  for (const sos of recentSosRequests) {
+    sosPoints.push({ lat: sos.lat, lng: sos.lng });
+  }
+  const bookingsByArea = bucketByNearestArea(filterPlausibleLocations(bookingPoints));
+  const sosByArea = bucketByNearestArea(filterPlausibleLocations(sosPoints));
 
-  const jobRequestsByArea = new Map(openJobRequests.map((r) => [r.area, r._count._all]));
-  const workersByArea = new Map(availableWorkers.map((r) => [r.area, r._count._all]));
-  const failedSearchesByArea = new Map(
-    recentFailedSearches.filter((r) => r.area !== null).map((r) => [r.area as DhakaArea, r._count._all])
-  );
+  // Turn each Prisma groupBy result into a simple "area -> count" map.
+  const jobRequestsByArea = new Map<DhakaArea, number>();
+  for (const row of openJobRequests) {
+    jobRequestsByArea.set(row.area, row._count._all);
+  }
+  const workersByArea = new Map<DhakaArea, number>();
+  for (const row of availableWorkers) {
+    workersByArea.set(row.area, row._count._all);
+  }
+  const failedSearchesByArea = new Map<DhakaArea, number>();
+  for (const row of recentFailedSearches) {
+    if (row.area !== null) {
+      failedSearchesByArea.set(row.area, row._count._all);
+    }
+  }
 
+  // Build one result row per Dhaka area, with its score.
   const areas = Object.keys(DHAKA_AREA_COORDS) as DhakaArea[];
+  const results: OpportunityArea[] = [];
 
-  const results: OpportunityArea[] = areas.map((area) => {
+  for (const area of areas) {
     const openJobRequestCount = jobRequestsByArea.get(area) ?? 0;
     const bookingCount = bookingsByArea.get(area) ?? 0;
     const sosCount = sosByArea.get(area) ?? 0;
     const failedSearchCount = failedSearchesByArea.get(area) ?? 0;
     const workerCount = workersByArea.get(area) ?? 0;
 
-    return {
+    const score = computeShortageScore({
+      openJobRequests: openJobRequestCount,
+      recentSosRequests: sosCount,
+      recentBookings: bookingCount,
+      recentFailedSearches: failedSearchCount,
+      availableWorkers: workerCount,
+    });
+
+    results.push({
       area,
       label: AREA_LABEL_BY_VALUE.get(area) ?? area,
       lat: DHAKA_AREA_COORDS[area].lat,
@@ -105,15 +114,11 @@ export async function getOpportunityAreas(): Promise<OpportunityArea[]> {
       recentSosRequests: sosCount,
       recentFailedSearches: failedSearchCount,
       availableWorkers: workerCount,
-      score: computeShortageScore({
-        openJobRequests: openJobRequestCount,
-        recentSosRequests: sosCount,
-        recentBookings: bookingCount,
-        recentFailedSearches: failedSearchCount,
-        availableWorkers: workerCount,
-      }),
-    };
-  });
+      score,
+    });
+  }
 
-  return results.sort((a, b) => b.score - a.score);
+  // Highest shortage score first.
+  results.sort((a, b) => b.score - a.score);
+  return results;
 }

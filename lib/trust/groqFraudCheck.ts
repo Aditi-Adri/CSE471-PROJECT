@@ -14,7 +14,10 @@
  * docs/FEATURE_SPEC.md).
  */
 
-const DEFAULT_MODEL = "llama-3.3-70b-versatile";
+// Same retired-model fix as lib/ai/groqClient.ts — Groq removed
+// llama-3.3-70b-versatile, so every call here was 404ing and silently
+// falling back to the local heuristic. See that file's note.
+const DEFAULT_MODEL = "openai/gpt-oss-120b";
 const DEFAULT_TIMEOUT_MS = 5000;
 
 export type GroqFraudResult = {

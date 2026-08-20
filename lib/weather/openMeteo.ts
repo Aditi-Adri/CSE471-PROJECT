@@ -1,21 +1,7 @@
-/**
- * Real current Dhaka weather via Open-Meteo (https://open-meteo.com) —
- * a different free API than Groq, picked because it's the best tool
- * for *this* specific job: it needs no API key at all (no signup, no
- * quota to manage, none of the account-flagging trouble the team hit
- * with Gemini), which fits a small student project better than
- * anything requiring registration.
- *
- * Deliberately a separate, honest signal rather than folded into
- * demandScore.ts's score formula: we have no real data proving "rain
- * increases plumbing demand in Dhaka by X%" for this app, and making
- * that number up would contradict every other part of this feature,
- * which is built entirely from real rows. So weather is surfaced as
- * its own context card on the opportunities dashboard, and — see
- * opportunityInsight.ts — handed to the AI summary purely as a fact
- * to *describe* ("it's currently raining"), never as an instruction to
- * assert an unproven cause.
- */
+// Gets the real current Dhaka weather from Open-Meteo — a free API
+// that needs no API key or signup. Shown as its own card on the
+// opportunities dashboard, kept separate from the demand score itself
+// since there's no real data proving weather affects demand here.
 
 const DHAKA_CENTER = { lat: 23.8103, lng: 90.4125 };
 const DEFAULT_TIMEOUT_MS = 4000;
@@ -27,9 +13,7 @@ export type DhakaWeather = {
   condition: string;
 };
 
-// WMO weather codes (the standard Open-Meteo, and most weather APIs,
-// report) reduced to the handful of plain-English buckets relevant
-// here. Full table: https://open-meteo.com/en/docs#weathervariables
+// Turns Open-Meteo's numeric weather code into a plain English word.
 function describeWeatherCode(code: number): string {
   if (code === 0) return "clear sky";
   if (code <= 3) return "partly cloudy";
@@ -42,11 +26,8 @@ function describeWeatherCode(code: number): string {
   return "mixed conditions";
 }
 
-/**
- * Never throws — returns null on any failure (network, timeout, bad
- * response), same defensive contract as the Groq calls. The weather
- * card just doesn't render rather than breaking the page.
- */
+// Never throws — returns null on any failure (network, timeout, bad
+// response), so the weather card just doesn't show instead of crashing.
 export async function getDhakaWeather(): Promise<DhakaWeather | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);

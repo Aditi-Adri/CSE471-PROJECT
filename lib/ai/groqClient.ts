@@ -21,7 +21,13 @@
  * engine automatically.
  */
 
-const DEFAULT_MODEL = "llama-3.3-70b-versatile";
+// Groq retires models fairly often — llama-3.3-70b-versatile, what this
+// used to point at, now 404s with "model does not exist", which made
+// every AI call fail silently and fall back to the keyword engine
+// (matchMethod came back "KEYWORD" even with a valid key set). Check
+// https://console.groq.com/docs/models, or GET /openai/v1/models with
+// the API key, if that happens again.
+const DEFAULT_MODEL = "openai/gpt-oss-120b";
 const DEFAULT_TIMEOUT_MS = 5000;
 
 export type GroqCategoryResult = {
@@ -130,7 +136,13 @@ export async function summarizeOpportunitiesWithGroq(
       body: JSON.stringify({
         model,
         temperature: 0.4,
-        max_tokens: 120,
+        // Generous for a ~30-word answer on purpose: gpt-oss is a
+        // reasoning model, so it spends tokens thinking before it
+        // writes anything (~220 here). At the old cap of 120 the
+        // reasoning alone used all of them and `content` came back as
+        // an empty string, which read as a failure and silently fell
+        // back to the deterministic sentence every single time.
+        max_tokens: 500,
         messages: [
           {
             role: "system",

@@ -2,20 +2,12 @@ import { summarizeOpportunitiesWithGroq } from "@/lib/ai/groqClient";
 import type { OpportunityArea } from "./demandScore";
 import type { DhakaWeather } from "@/lib/weather/openMeteo";
 
-/**
- * Turns the top few areas from getOpportunityAreas() into one short,
- * actionable sentence for the worker opportunities dashboard — same
- * two-tier strategy as lib/ai/categoryMapper.ts: try the free Groq API
- * first, fall back to a deterministic template built from the same
- * numbers on any failure (missing key, timeout, quota, bad response).
- * Either path is always a real sentence grounded in real numbers —
- * never a generic placeholder.
- *
- * `weather`, if given, is handed to Groq as a plain fact to mention if
- * relevant ("it's currently raining") — the prompt explicitly does not
- * ask it to assert a demand-weather correlation, because we don't have
- * real data to back one. See lib/weather/openMeteo.ts.
- */
+// Turns the top few areas into one short sentence for the dashboard.
+// Tries the free Groq AI first; if that fails (no key, timeout, bad
+// response) it falls back to a plain template built from the same
+// numbers — so there's always a real sentence, never a placeholder.
+// Weather (if given) is passed to the AI only as a fact it can mention,
+// not as something it should claim causes the demand.
 export async function getOpportunityInsight(
   topAreas: OpportunityArea[],
   weather?: DhakaWeather | null

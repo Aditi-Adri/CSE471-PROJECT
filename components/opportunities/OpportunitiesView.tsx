@@ -19,14 +19,9 @@ type OpportunitiesResponse = {
   insight: string;
 };
 
-/**
- * /dashboard/opportunities — the neighborhood demand heatmap (Module
- * 2, Feature 2). Fetches everything from one endpoint
- * (GET /api/opportunities) and owns the one piece of shared UI state:
- * which area is "selected," so clicking either the map or the table
- * highlights both — a click in one is a click in both, not two
- * separate views of the same data.
- */
+// The main opportunities dashboard. Loads everything from one API
+// call and keeps track of which area is "selected," so clicking
+// either the map or the table highlights both at once.
 export function OpportunitiesView() {
   const [data, setData] = useState<OpportunitiesResponse | null>(null);
   const [error, setError] = useState<string | null>(null);

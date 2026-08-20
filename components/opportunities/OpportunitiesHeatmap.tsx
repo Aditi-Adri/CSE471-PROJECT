@@ -8,29 +8,23 @@ import type { OpportunityAreaData } from "./types";
 
 type LeafletModule = typeof import("leaflet");
 
-// Same dynamic-import pattern as WorkerMapView.tsx / LiveTrackingMap.tsx
-// — react-leaflet touches `window` at import time, so it can't render
-// on the server.
+// react-leaflet touches `window` at import time, so it can't render on
+// the server — same dynamic-import pattern as the other map components.
 const MapContainer = dynamic(() => import("react-leaflet").then((mod) => mod.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import("react-leaflet").then((mod) => mod.TileLayer), { ssr: false });
 const CircleMarker = dynamic(() => import("react-leaflet").then((mod) => mod.CircleMarker), { ssr: false });
 const Popup = dynamic(() => import("react-leaflet").then((mod) => mod.Popup), { ssr: false });
 
-/** Red = highest relative shortage, amber = moderate, emerald = well-covered. */
+// Red = highest shortage, amber = moderate, green = well-covered.
 function scoreColor(ratio: number): string {
   if (ratio >= 0.66) return "#ef4444";
   if (ratio >= 0.33) return "#f59e0b";
   return "#10b981";
 }
 
-/**
- * The heatmap half of /dashboard/opportunities — a bubble map (circle
- * size + color by shortage score) rather than a smooth gradient
- * overlay, so every number on it is directly readable in the popup
- * rather than implied by a blurred color blend. Click a circle (or a
- * row in the table next to it) to sync selection both ways, and to
- * jump straight into the existing apply flow for that area.
- */
+// The map half of the dashboard: one circle per area, sized and
+// colored by shortage score. Clicking a circle (or a table row)
+// selects that area in both places at once.
 export function OpportunitiesHeatmap({
   areas,
   selectedArea,
@@ -53,11 +47,17 @@ export function OpportunitiesHeatmap({
     return <div className="h-[420px] animate-pulse rounded-2xl bg-zinc-100 dark:bg-zinc-900" />;
   }
 
-  const maxScore = Math.max(...areas.map((a) => a.score), 0.001);
-  const center: [number, number] = [
-    areas.reduce((sum, a) => sum + a.lat, 0) / areas.length,
-    areas.reduce((sum, a) => sum + a.lng, 0) / areas.length,
-  ];
+  // Find the highest score (for sizing circles) and the average
+  // lat/lng of all areas (to center the map on Dhaka).
+  let maxScore = 0.001;
+  let latSum = 0;
+  let lngSum = 0;
+  for (const area of areas) {
+    if (area.score > maxScore) maxScore = area.score;
+    latSum += area.lat;
+    lngSum += area.lng;
+  }
+  const center: [number, number] = [latSum / areas.length, lngSum / areas.length];
 
   return (
     <div className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800">
