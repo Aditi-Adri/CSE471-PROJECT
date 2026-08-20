@@ -11,11 +11,9 @@ type Part = {
   stockQty: number;
 };
 
-/**
- * Lets the hired worker buy spare parts for a job. Cost gets added to
- * the job's bill (see /api/job-requests/[id]/parts) instead of the
- * worker paying for it themselves.
- */
+// Lets the hired worker buy spare parts for a job. The cost gets
+// added onto the job's bill instead of the worker paying for it
+// themselves.
 export function BuyPartsForm({ jobRequestId, onBought }: { jobRequestId: string; onBought: () => void }) {
   const [parts, setParts] = useState<Part[] | null>(null);
   const [quantities, setQuantities] = useState<Record<string, string>>({});
@@ -23,16 +21,28 @@ export function BuyPartsForm({ jobRequestId, onBought }: { jobRequestId: string;
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/parts")
-      .then((res) => res.json())
-      .then((data: { parts: Part[] }) => setParts(data.parts ?? []))
-      .catch(() => setParts([]));
+    async function loadParts() {
+      try {
+        const response = await fetch("/api/parts");
+        const data = await response.json();
+        setParts(data.parts || []);
+      } catch {
+        setParts([]);
+      }
+    }
+    loadParts();
   }, []);
 
   async function handleBuy() {
-    const items = Object.entries(quantities)
-      .map(([partId, qty]) => ({ partId, quantity: Number(qty) }))
-      .filter((item) => item.quantity > 0);
+    // Turn the quantity boxes into a list of { partId, quantity },
+    // skipping any part left at 0 or blank.
+    const items = [];
+    for (const partId in quantities) {
+      const quantity = Number(quantities[partId]);
+      if (quantity > 0) {
+        items.push({ partId, quantity });
+      }
+    }
 
     if (items.length === 0) {
       setMessage("Pick at least one part.");
@@ -41,19 +51,21 @@ export function BuyPartsForm({ jobRequestId, onBought }: { jobRequestId: string;
 
     setBuying(true);
     setMessage(null);
+
     try {
-      const res = await fetch(`/api/job-requests/${jobRequestId}/parts`, {
+      const response = await fetch(`/api/job-requests/${jobRequestId}/parts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ items }),
       });
-      if (res.ok) {
+
+      if (response.ok) {
         setMessage("Added to your bill.");
         setQuantities({});
         onBought();
       } else {
-        const body = await res.json().catch(() => null);
-        setMessage(body?.error ?? "Couldn't buy those parts.");
+        const errorBody = await response.json().catch(() => null);
+        setMessage(errorBody?.error || "Couldn't buy those parts.");
       }
     } finally {
       setBuying(false);
@@ -81,7 +93,7 @@ export function BuyPartsForm({ jobRequestId, onBought }: { jobRequestId: string;
             min={0}
             max={part.stockQty}
             placeholder="0"
-            value={quantities[part.id] ?? ""}
+            value={quantities[part.id] || ""}
             onChange={(e) => setQuantities({ ...quantities, [part.id]: e.target.value })}
             className="w-16 rounded-lg border border-zinc-200 px-2 py-1 dark:border-zinc-700 dark:bg-zinc-950"
           />

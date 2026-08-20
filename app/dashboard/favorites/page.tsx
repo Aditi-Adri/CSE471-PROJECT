@@ -4,12 +4,22 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/authOptions";
 import { FavoritesList } from "@/components/favorites/FavoritesList";
 
+// The "My favorites" page. Customers only.
 export const metadata: Metadata = { title: "My favorites" };
 
 export default async function FavoritesPage() {
   const session = await getServerSession(authOptions);
-  if (!session?.user) redirect("/login?callbackUrl=/dashboard/favorites");
-  if (session.user.role !== "CUSTOMER" && session.user.role !== "CORPORATE") redirect("/");
+
+  // Must be logged in.
+  if (!session?.user) {
+    redirect("/login?callbackUrl=/dashboard/favorites");
+  }
+
+  // Must be a customer — workers don't get this page.
+  const isCustomer = session.user.role === "CUSTOMER" || session.user.role === "CORPORATE";
+  if (!isCustomer) {
+    redirect("/");
+  }
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 lg:px-8">

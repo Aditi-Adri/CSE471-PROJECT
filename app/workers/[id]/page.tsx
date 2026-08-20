@@ -57,16 +57,21 @@ export default async function WorkerProfilePage({
   if (!worker) notFound();
   const trustBreakdown = await getTrustBreakdown(worker.id);
 
-  // Only customers can favorite a worker - check who's looking and
-  // whether they've already starred this one.
+  // Check who is looking at this profile. Only customers get a
+  // Save button, and we need to know if they already starred this worker.
   const session = await getServerSession(authOptions);
-  const isCustomer = session?.user?.role === "CUSTOMER" || session?.user?.role === "CORPORATE";
+  const userRole = session?.user?.role;
+  const isCustomer = userRole === "CUSTOMER" || userRole === "CORPORATE";
+
   let alreadyFavorited = false;
   if (isCustomer && session?.user?.id) {
+    const customerId = session.user.id;
     const favorite = await prisma.favorite.findUnique({
-      where: { customerId_workerId: { customerId: session.user.id, workerId: worker.id } },
+      where: { customerId_workerId: { customerId, workerId: worker.id } },
     });
-    alreadyFavorited = favorite !== null;
+    if (favorite) {
+      alreadyFavorited = true;
+    }
   }
 
   return (

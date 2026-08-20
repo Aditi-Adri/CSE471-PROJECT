@@ -3,11 +3,8 @@ import { authOptions } from "@/lib/auth/authOptions";
 import { prisma } from "@/lib/db";
 import { withErrorHandling } from "@/lib/api/withErrorHandling";
 
-/**
- * GET /api/favorites
- *
- * The signed-in customer's starred workers, newest first.
- */
+// GET /api/favorites
+// Returns the signed-in customer's saved workers, newest first.
 export const GET = withErrorHandling(async () => {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
@@ -32,5 +29,11 @@ export const GET = withErrorHandling(async () => {
     },
   });
 
-  return Response.json({ workers: favorites.map((f) => f.worker) });
+  // Each favorite row wraps a worker — pull the worker out of each one.
+  const workers = [];
+  for (const favorite of favorites) {
+    workers.push(favorite.worker);
+  }
+
+  return Response.json({ workers });
 });
