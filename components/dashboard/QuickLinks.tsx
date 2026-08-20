@@ -7,6 +7,7 @@ import {
   ShieldCheckIcon,
   SirenIcon,
   StarIcon,
+  TagIcon,
   WrenchIcon,
 } from "@/components/marketing/icons";
 import type { Role } from "@/app/generated/prisma/client";
@@ -61,6 +62,12 @@ function getQuickLinks(role: Role, hasWorkerProfile: boolean): QuickLink[] {
           description: "Workers you've saved — book them again without searching.",
           icon: StarIcon,
         },
+        {
+          href: "/dashboard/coupons",
+          title: "My coupons",
+          description: "Codes you can apply at checkout in the spare parts shop.",
+          icon: TagIcon,
+        },
       ];
 
     case "WORKER":
@@ -99,6 +106,12 @@ function getQuickLinks(role: Role, hasWorkerProfile: boolean): QuickLink[] {
           description: "A heatmap of which Dhaka neighborhoods need workers most, right now.",
           icon: MapPinIcon,
         },
+        {
+          href: "/dashboard/coupons",
+          title: "My coupons",
+          description: "Codes you can apply at checkout in the spare parts shop.",
+          icon: TagIcon,
+        },
       ];
 
     case "ADMIN":
@@ -114,6 +127,12 @@ function getQuickLinks(role: Role, hasWorkerProfile: boolean): QuickLink[] {
           title: "Review moderation",
           description: "Fraud-flagged customer reviews, surfaced for a human decision.",
           icon: ShieldCheckIcon,
+        },
+        {
+          href: "/admin/coupons",
+          title: "Coupon management",
+          description: "Create and deactivate discount codes for the spare parts shop.",
+          icon: TagIcon,
         },
       ];
   }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { useState } from "react";
 import { GoogleButton } from "./GoogleButton";
@@ -12,6 +12,7 @@ import { firstIssueMessage } from "@/lib/validation/formatZodIssues";
 
 export function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -19,6 +20,10 @@ export function RegisterForm() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [role, setRole] = useState<PublicRole>("CUSTOMER");
+  // MODULE 4 (Shiva): prefilled from a shared referral link
+  // (/register?ref=CODE — see components/coupons/ReferralCard.tsx),
+  // still editable/removable by hand.
+  const [referralCode, setReferralCode] = useState(() => searchParams.get("ref") ?? "");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -36,7 +41,15 @@ export function RegisterForm() {
     const response = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, phone, password, confirmPassword, role }),
+      body: JSON.stringify({
+        name,
+        email,
+        phone,
+        password,
+        confirmPassword,
+        role,
+        referralCode: referralCode || undefined,
+      }),
     });
     const data = await response.json();
 
@@ -148,6 +161,21 @@ export function RegisterForm() {
             className={inputClasses}
             placeholder="Re-enter your password"
           />
+        </label>
+
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Referral code <span className="font-normal text-zinc-400">(optional)</span>
+          </span>
+          <input
+            value={referralCode}
+            onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+            className={inputClasses}
+            placeholder="e.g. K7QXTF2M"
+          />
+          <span className="text-xs text-zinc-400">
+            Have a friend&apos;s code? You&apos;ll both get a coupon once you sign up.
+          </span>
         </label>
 
         <button type="submit" disabled={isSubmitting} className={primaryButtonClasses}>
