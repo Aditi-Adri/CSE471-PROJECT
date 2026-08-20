@@ -1,17 +1,9 @@
-/**
- * Free, zero-cost, always-available category classifier.
- *
- * This is the PRIMARY classification path for Smart Search (see
- * categoryMapper.ts) — it costs nothing, needs no network call, and
- * never fails, so a demo/viva never depends on a third-party API being
- * reachable. The optional AI path in groqClient.ts only kicks in when
- * a free Groq API key is explicitly configured.
- *
- * Algorithm: normalize the query, then score each category by how many
- * of its keyword phrases appear in the text. Multi-word phrases (e.g.
- * "water tap") count for more than single words (e.g. "leak") because
- * they're far less likely to match by coincidence.
- */
+// A free, always-available category matcher: no API key or network
+// call needed, so search still works even with no Groq key set.
+// How it works: normalize the query text, then score each category by
+// how many of its keyword phrases appear in it. A multi-word phrase
+// (like "water tap") counts for more than a single word (like "leak"),
+// since it's much less likely to match by coincidence.
 
 export type CategoryForMatching = {
   id: string;
@@ -41,9 +33,9 @@ export function normalizeQuery(text: string): string {
     .trim();
 }
 
+// A multi-word keyword (like "water tap") counts for more than a
+// single word (like "leak"), since it's more specific.
 function keywordWeight(keyword: string): number {
-  // Multi-word phrases are much more specific than single words, so they
-  // should dominate the score when present.
   const wordCount = keyword.trim().split(/\s+/).length;
   return wordCount >= 2 ? 3 : 1;
 }
@@ -53,55 +45,51 @@ export function classifyWithKeywords(
   categories: readonly CategoryForMatching[]
 ): KeywordClassification {
   const normalized = normalizeQuery(rawQuery);
-
   if (!normalized) {
     return { best: null, ranked: [], confidence: 0 };
   }
 
+  // Pad with spaces so a keyword only matches on word boundaries —
+  // e.g. "tap" won't match inside an unrelated word like "adaptation".
   const paddedQuery = ` ${normalized} `;
 
-  const ranked: KeywordMatch[] = categories
-    .map((category) => {
-      let score = 0;
-      const matchedKeywords: string[] = [];
+  // Score every category by how many of its keywords appear in the query.
+  const matches: KeywordMatch[] = [];
+  for (const category of categories) {
+    let score = 0;
+    const matchedKeywords: string[] = [];
 
-      for (const keyword of category.keywords) {
-        const normalizedKeyword = normalizeQuery(keyword);
-        if (!normalizedKeyword) continue;
+    for (const keyword of category.keywords) {
+      const normalizedKeyword = normalizeQuery(keyword);
+      if (!normalizedKeyword) continue;
 
-        // Substring match against a space-padded query so keywords only
-        // match on word boundaries — e.g. "tap" won't match inside an
-        // unrelated word like "adaptation". The leading/trailing padding
-        // on paddedQuery also makes boundary matches work at the very
-        // start/end of the query without special-casing them.
-        if (paddedQuery.includes(` ${normalizedKeyword} `)) {
-          score += keywordWeight(normalizedKeyword);
-          matchedKeywords.push(keyword);
-        }
+      if (paddedQuery.includes(` ${normalizedKeyword} `)) {
+        score += keywordWeight(normalizedKeyword);
+        matchedKeywords.push(keyword);
       }
+    }
 
-      return {
-        categoryId: category.id,
-        categoryName: category.name,
-        score,
-        matchedKeywords,
-      };
-    })
-    .filter((m) => m.score > 0)
-    .sort((a, b) => b.score - a.score);
+    if (score > 0) {
+      matches.push({ categoryId: category.id, categoryName: category.name, score, matchedKeywords });
+    }
+  }
 
-  if (ranked.length === 0) {
+  // Highest score first.
+  matches.sort((a, b) => b.score - a.score);
+
+  if (matches.length === 0) {
     return { best: null, ranked: [], confidence: 0 };
   }
 
-  const best = ranked[0];
-  const runnerUpScore = ranked[1]?.score ?? 0;
-  // Confidence rewards both an absolute strong match and a clear margin
-  // over the second-best category, capped at 0.97 (never claim certainty
-  // — this is a heuristic, not a model prediction).
+  const best = matches[0];
+  const runnerUpScore = matches[1]?.score ?? 0;
+
+  // Confidence is higher when the best match is strong on its own, and
+  // higher again when it clearly beats the second-best category.
+  // Capped at 0.97 since this is a heuristic, not a real prediction.
   const absoluteStrength = Math.min(best.score / 4, 1);
   const margin = runnerUpScore === 0 ? 1 : Math.min((best.score - runnerUpScore) / best.score, 1);
   const confidence = Math.round(Math.min(0.4 + absoluteStrength * 0.4 + margin * 0.2, 0.97) * 100) / 100;
 
-  return { best, ranked, confidence };
+  return { best, ranked: matches, confidence };
 }

@@ -17,10 +17,8 @@ export const TIER_RANK: Record<VerificationTier, number> = {
   TIER3_POLICE_CLEARED: 3,
 };
 
-/**
- * Pure function: filters -> Prisma `where` clause. Kept separate from the
- * API route so it can be unit tested without touching a real database.
- */
+// Turns the search filters into a Prisma `where` clause. Kept separate
+// from the API route so it can be unit tested with no database needed.
 export function buildWorkerWhere(filters: WorkerSearchFilters): Prisma.WorkerWhereInput {
   const where: Prisma.WorkerWhereInput = {};
 
@@ -36,11 +34,9 @@ export function buildWorkerWhere(filters: WorkerSearchFilters): Prisma.WorkerWhe
     where.isAvailableNow = true;
   }
 
-  // Budget filter is a range-overlap check: a worker matches if their
-  // [hourlyRateMinBdt, hourlyRateMaxBdt] range overlaps the customer's
-  // requested [minBudget, maxBudget] window at all, not just if it's
-  // fully contained — a customer with a 500-800 BDT budget should still
-  // see a worker whose range is 700-1200.
+  // Budget is a range-overlap check, not "fully contained": a worker
+  // whose rate is 700-1200 should still show up for a 500-800 budget,
+  // since the ranges overlap.
   if (typeof filters.maxBudget === "number") {
     where.hourlyRateMinBdt = { lte: filters.maxBudget };
   }
@@ -49,21 +45,23 @@ export function buildWorkerWhere(filters: WorkerSearchFilters): Prisma.WorkerWhe
   }
 
   if (filters.minTier) {
-    const allowedTiers = (Object.keys(TIER_RANK) as VerificationTier[]).filter(
-      (tier) => TIER_RANK[tier] >= TIER_RANK[filters.minTier as VerificationTier]
-    );
+    // Keep every tier that's at least as high as the one requested.
+    const minRank = TIER_RANK[filters.minTier];
+    const allowedTiers: VerificationTier[] = [];
+    for (const tier in TIER_RANK) {
+      const tierKey = tier as VerificationTier;
+      if (TIER_RANK[tierKey] >= minRank) {
+        allowedTiers.push(tierKey);
+      }
+    }
     where.verificationTier = { in: allowedTiers };
   }
 
   return where;
 }
 
-/**
- * Pure function: sort option -> Prisma `orderBy`. The default
- * (RELEVANCE) ranks verified, highly-rated, experienced workers first —
- * this is what implements "verification boosts search ranking" from the
- * spec.
- */
+// Turns a sort option into a Prisma `orderBy`. The default (RELEVANCE)
+// ranks verified, highly-rated, experienced workers first.
 export function buildWorkerOrderBy(
   sort: SortOption
 ): Prisma.WorkerOrderByWithRelationInput[] {
