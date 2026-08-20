@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { GoogleButton } from "./GoogleButton";
 import { RoleSelect } from "./RoleSelect";
 import { authCardClasses, errorBannerClasses, inputClasses, primaryButtonClasses } from "./shared";
@@ -22,8 +22,22 @@ export function RegisterForm() {
   const [role, setRole] = useState<PublicRole>("CUSTOMER");
   // MODULE 4 (Shiva): prefilled from a shared referral link
   // (/register?ref=CODE — see components/coupons/ReferralCard.tsx),
-  // still editable/removable by hand.
+  // still editable/removable by hand. `lastSyncedRef` tracks what was
+  // last auto-filled from the URL, so a client-side navigation to a
+  // *different* ?ref= (this route can soft-navigate without
+  // remounting — see commit 1cefee3 fixing the same staleness pattern
+  // on the job-requests area filter) updates the field, while a value
+  // the user typed themselves is never silently overwritten.
   const [referralCode, setReferralCode] = useState(() => searchParams.get("ref") ?? "");
+  const lastSyncedRef = useRef(referralCode);
+
+  useEffect(() => {
+    const fromUrl = searchParams.get("ref") ?? "";
+    if (fromUrl !== lastSyncedRef.current) {
+      setReferralCode((current) => (current === lastSyncedRef.current ? fromUrl : current));
+      lastSyncedRef.current = fromUrl;
+    }
+  }, [searchParams]);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 

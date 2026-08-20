@@ -123,6 +123,17 @@ function CartPageContent() {
       return;
     }
 
+    // The cart changed since the applied coupon's discount was last
+    // computed — refuse to charge against a total the screen isn't
+    // actually showing. (The server would recompute the real discount
+    // correctly either way, but silently charging something other
+    // than the number the customer just looked at is exactly what the
+    // "stale" flag exists to prevent.)
+    if (couponStale) {
+      setError("Your cart changed since the coupon was applied — recalculate it before confirming.");
+      return;
+    }
+
     try {
       setConfirming(true);
       setError("");
@@ -434,10 +445,10 @@ function CartPageContent() {
               <button
                 type="button"
                 onClick={handleConfirmPayment}
-                disabled={confirming || lines.length === 0}
+                disabled={confirming || lines.length === 0 || couponStale}
                 className="mt-5 w-full rounded-lg bg-brand-600 px-4 py-3 text-sm font-semibold text-white shadow-sm shadow-brand-600/20 transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-500 dark:disabled:bg-zinc-800 dark:disabled:text-zinc-500"
               >
-                {confirming ? "Confirming…" : "Confirm payment"}
+                {confirming ? "Confirming…" : couponStale ? "Recalculate coupon to continue" : "Confirm payment"}
               </button>
 
               <button

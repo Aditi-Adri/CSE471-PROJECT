@@ -27,7 +27,20 @@ export function computeDiscountBdt(coupon: CouponDiscount, orderTotalBdt: number
   const rawDiscount =
     coupon.discountType === "PERCENT" ? Math.round((orderTotalBdt * coupon.value) / 100) : coupon.value;
 
-  const capped = coupon.maxDiscountBdt != null ? Math.min(rawDiscount, coupon.maxDiscountBdt) : rawDiscount;
+  // maxDiscountBdt only ever caps a PERCENT discount (see the doc
+  // comment above and on Coupon.maxDiscountBdt in schema.prisma) — a
+  // FIXED coupon's value already *is* the taka amount, so applying the
+  // cap to it too would silently shrink an admin's flat "৳X off" down
+  // to whatever the cap happens to be.
+  const capped =
+    coupon.discountType === "PERCENT" && coupon.maxDiscountBdt != null
+      ? Math.min(rawDiscount, coupon.maxDiscountBdt)
+      : rawDiscount;
 
-  return Math.max(0, Math.min(capped, orderTotalBdt));
+  // Money in this app is always whole taka (the "Bdt" Int convention
+  // used everywhere from wageBdt to budgetMinBdt) — round defensively
+  // here too, so a caller that ever passes a fractional orderTotalBdt
+  // can't produce a fractional result that then fails to insert into
+  // the Int discountBdt columns.
+  return Math.round(Math.max(0, Math.min(capped, orderTotalBdt)));
 }

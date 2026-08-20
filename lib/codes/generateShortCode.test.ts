@@ -14,7 +14,12 @@ describe("generateShortCode", () => {
   it("only uses unambiguous uppercase letters and digits", () => {
     const code = generateShortCode(200);
     expect(code).toMatch(/^[A-Z0-9]+$/);
-    expect(code).not.toMatch(/[01OIL]/);
+    expect(code).not.toMatch(/[01OI]/);
+  });
+
+  it("uses a 32-character alphabet, so byte-to-character mapping has no modulo bias", () => {
+    const alphabet = new Set(generateShortCode(5000));
+    expect(alphabet.size).toBe(32);
   });
 
   it("is different across calls", () => {

@@ -9,11 +9,15 @@ export const metadata: Metadata = {
 
 // useSearchParams() (for the ?ref= referral code prefill, below)
 // requires a Suspense boundary above it — same reason app/shop/cart's
-// page has one.
+// page has one, including the fallback (a bare <Suspense> with none
+// renders nothing while suspended, which reads as a blank page rather
+// than a loading state).
 export default function RegisterPage() {
   return (
     <div className="flex flex-1 items-center justify-center px-4 py-16">
-      <Suspense>
+      <Suspense
+        fallback={<p className="animate-pulse text-sm text-zinc-500 dark:text-zinc-400">Loading…</p>}
+      >
         <RegisterForm />
       </Suspense>
     </div>

@@ -7,10 +7,18 @@ import { checkCouponEligibility, type CouponEligibility } from "./couponEligibil
  *
  * `db` is typed structurally (just the two delegates this needs)
  * rather than as `PrismaClient` so the same function works both for a
- * live preview (app/api/coupons/validate) and inside the checkout's
- * own transaction (app/api/shop/orders — passing `tx`, so the counts
- * it sees can't be raced by two requests redeeming the same
- * single-use code at once).
+ * live preview (app/api/coupons/validate — passing `prisma`, purely
+ * read-only, nothing here needs to be race-proof for a preview) and
+ * inside the checkout's own transaction (app/api/shop/orders —
+ * passing `tx`).
+ *
+ * On its own, passing `tx` would *not* make the counts here race-proof
+ * against a genuinely concurrent redemption of the same code (Postgres'
+ * default READ COMMITTED isolation lets two simultaneous transactions
+ * each read "not yet at the limit" before either commits) — the
+ * checkout route closes that with a `pg_advisory_xact_lock` taken
+ * before calling this, not by anything in here. See the comment at
+ * that call site.
  */
 type CouponDb = Pick<typeof prisma, "coupon" | "couponRedemption">;
 

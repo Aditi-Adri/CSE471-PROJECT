@@ -99,4 +99,8 @@ describe("describeCouponEligibilityReason", () => {
   it("falls back to a generic message when the minimum isn't known", () => {
     expect(describeCouponEligibilityReason("below_minimum_order")).not.toContain("৳");
   });
+
+  it("gives 'not_found' and 'not_yours' the identical message, so a private coupon's existence can't be probed", () => {
+    expect(describeCouponEligibilityReason("not_found")).toBe(describeCouponEligibilityReason("not_yours"));
+  });
 });

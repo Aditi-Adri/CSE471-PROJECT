@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { formatBdt } from "@/lib/types/shop";
 
 type MyCoupon = {
   code: string;
@@ -13,9 +14,10 @@ type MyCoupon = {
 };
 
 function describeCoupon(coupon: MyCoupon): string {
-  const amount = coupon.discountType === "PERCENT" ? `${coupon.value}% off` : `৳${coupon.value} off`;
-  const cap = coupon.discountType === "PERCENT" && coupon.maxDiscountBdt ? ` (up to ৳${coupon.maxDiscountBdt})` : "";
-  const min = coupon.minOrderBdt ? ` on orders of ৳${coupon.minOrderBdt}+` : "";
+  const amount = coupon.discountType === "PERCENT" ? `${coupon.value}% off` : `${formatBdt(coupon.value)} off`;
+  const cap =
+    coupon.discountType === "PERCENT" && coupon.maxDiscountBdt ? ` (up to ${formatBdt(coupon.maxDiscountBdt)})` : "";
+  const min = coupon.minOrderBdt ? ` on orders of ${formatBdt(coupon.minOrderBdt)}+` : "";
   return `${amount}${cap}${min}`;
 }
 

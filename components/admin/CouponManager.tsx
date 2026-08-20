@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { inputClasses, primaryButtonClasses } from "@/lib/ui/formStyles";
+import { formatBdt } from "@/lib/types/shop";
 
 type AdminCoupon = {
   id: string;
@@ -18,9 +20,6 @@ type AdminCoupon = {
   _count: { redemptions: number };
   issuedToUser: { name: string; email: string } | null;
 };
-
-const inputClasses =
-  "rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100";
 
 const emptyForm = {
   code: "",
@@ -57,16 +56,37 @@ export function CouponManager() {
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+
+    // Validated here (rather than leaving a NaN/empty field to reach
+    // the server, where JSON.stringify would silently turn NaN into
+    // null and produce a confusing "expected number, received null"
+    // instead of a message the admin can act on).
+    const value = Number(form.value);
+    const perUserLimit = Number(form.perUserLimit);
+    if (!Number.isFinite(value) || value < 1) {
+      setError("Enter a valid discount value.");
+      return;
+    }
+    if (!Number.isFinite(perUserLimit) || perUserLimit < 1) {
+      setError("Enter a valid 'uses per person' value.");
+      return;
+    }
+
     setSubmitting(true);
 
     const body = {
       code: form.code || undefined,
       discountType: form.discountType,
-      value: Number(form.value),
-      maxDiscountBdt: form.maxDiscountBdt ? Number(form.maxDiscountBdt) : undefined,
+      value,
+      // Only ever meaningful for PERCENT (lib/coupons/couponMath.ts
+      // ignores it for FIXED) — dropped here too, not just hidden by
+      // the form below, so a leftover value from switching discount
+      // types can't be sent.
+      maxDiscountBdt:
+        form.discountType === "PERCENT" && form.maxDiscountBdt ? Number(form.maxDiscountBdt) : undefined,
       minOrderBdt: form.minOrderBdt ? Number(form.minOrderBdt) : undefined,
       usageLimit: form.usageLimit ? Number(form.usageLimit) : undefined,
-      perUserLimit: Number(form.perUserLimit) || 1,
+      perUserLimit,
       expiresAt: form.expiresAt || undefined,
     };
 
@@ -122,7 +142,13 @@ export function CouponManager() {
           <span className="font-medium text-zinc-700 dark:text-zinc-300">Discount type</span>
           <select
             value={form.discountType}
-            onChange={(e) => setForm({ ...form, discountType: e.target.value as "PERCENT" | "FIXED" })}
+            onChange={(e) => {
+              const discountType = e.target.value as "PERCENT" | "FIXED";
+              // Max discount only applies to PERCENT — clear it on
+              // switching away so a value typed in while on PERCENT
+              // can't linger, hidden, and get submitted under FIXED.
+              setForm({ ...form, discountType, maxDiscountBdt: discountType === "PERCENT" ? form.maxDiscountBdt : "" });
+            }}
             className={inputClasses}
           >
             <option value="PERCENT">Percent off</option>
@@ -211,11 +237,7 @@ export function CouponManager() {
         </label>
 
         <div className="col-span-full">
-          <button
-            type="submit"
-            disabled={submitting}
-            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-zinc-300"
-          >
+          <button type="submit" disabled={submitting} className={primaryButtonClasses}>
             {submitting ? "Creating…" : "Create coupon"}
           </button>
         </div>
@@ -253,8 +275,8 @@ export function CouponManager() {
                       </td>
                       <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
                         {coupon.discountType === "PERCENT"
-                          ? `${coupon.value}%${coupon.maxDiscountBdt ? ` (max ৳${coupon.maxDiscountBdt})` : ""}`
-                          : `৳${coupon.value}`}
+                          ? `${coupon.value}%${coupon.maxDiscountBdt ? ` (max ${formatBdt(coupon.maxDiscountBdt)})` : ""}`
+                          : formatBdt(coupon.value)}
                       </td>
                       <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
                         {coupon._count.redemptions}

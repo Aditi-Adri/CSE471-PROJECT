@@ -16,7 +16,14 @@ describe("computeDiscountBdt", () => {
     expect(computeDiscountBdt({ discountType: "PERCENT", value: 50, maxDiscountBdt: 200 }, 1000)).toBe(200);
   });
 
-  it("does not cap a FIXED discount that happens to be under maxDiscountBdt", () => {
+  it("never caps a FIXED discount, even when its value is well above maxDiscountBdt", () => {
+    // A stray maxDiscountBdt on a FIXED coupon (e.g. left over from
+    // switching discount types in the admin form) must not silently
+    // shrink the flat amount — maxDiscountBdt only means anything for
+    // PERCENT. Regression test: this exact case (value > maxDiscountBdt)
+    // is the one the previous "does not cap ... under maxDiscountBdt"
+    // test didn't cover.
+    expect(computeDiscountBdt({ discountType: "FIXED", value: 500, maxDiscountBdt: 100 }, 1000)).toBe(500);
     expect(computeDiscountBdt({ discountType: "FIXED", value: 50, maxDiscountBdt: 200 }, 1000)).toBe(50);
   });
 

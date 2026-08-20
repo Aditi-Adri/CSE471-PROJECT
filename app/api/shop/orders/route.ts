@@ -123,16 +123,33 @@ export async function POST(req: NextRequest) {
       // MODULE 4 (Shiva): re-validate the coupon server-side, from the
       // real redemption count, rather than trusting whatever discount
       // the client showed after calling /api/coupons/validate earlier
-      // — that call is only ever a preview. Known limitation: this
-      // still isn't airtight against two truly simultaneous submits
-      // from the same account both reading the count before either
-      // commits (Postgres' default READ COMMITTED doesn't block that);
-      // the UI's disabled-while-submitting button covers the realistic
-      // case (an accidental double-click), not a deliberate race.
+      // — that call is only ever a preview.
+      //
+      // Without more, this count-then-insert would still be racy under
+      // real concurrency: Postgres' default READ COMMITTED isolation
+      // lets two *different* simultaneous transactions each read "not
+      // yet at the limit" before either commits — oversells both
+      // perUserLimit (two tabs on one account) and usageLimit (many
+      // accounts racing the last redemptions of a capped promo), not
+      // just an accidental double-click. The advisory lock below closes
+      // that: it serializes every concurrent redemption attempt of
+      // this *same* coupon code against each other for the rest of the
+      // transaction (unrelated codes, or no coupon at all, are
+      // unaffected), and being transaction-scoped
+      // (`pg_advisory_xact_lock`, not the session-scoped
+      // `pg_advisory_lock`) it releases automatically on commit or
+      // rollback and plays fine with Neon's transaction-mode pooler.
       let discountBdt = 0;
       let couponId: string | null = null;
       if (couponCode) {
-        const { coupon, eligibility } = await loadCouponEligibility(tx, couponCode, workerId, subtotalAmount);
+        const normalizedCouponCode = couponCode.trim().toUpperCase();
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${normalizedCouponCode}))`;
+        const { coupon, eligibility } = await loadCouponEligibility(
+          tx,
+          normalizedCouponCode,
+          workerId,
+          subtotalAmount
+        );
         if (!eligibility.eligible) {
           throw new CouponError(eligibility.reason, describeCouponEligibilityReason(eligibility.reason, coupon));
         }

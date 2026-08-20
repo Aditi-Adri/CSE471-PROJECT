@@ -4,6 +4,7 @@ import { hashPassword } from "@/lib/auth/passwords";
 import { checkRateLimit, getClientIp } from "@/lib/auth/rateLimit";
 import { registerSchema } from "@/lib/validation/authSchemas";
 import { issueReferralReward } from "@/lib/referrals/issueReferralReward";
+import { withErrorHandling } from "@/lib/api/withErrorHandling";
 
 /**
  * POST /api/auth/register
@@ -13,7 +14,7 @@ import { issueReferralReward } from "@/lib/referrals/issueReferralReward";
  * so cookie issuance always goes through NextAuth's own flow rather
  * than a hand-rolled one here.
  */
-export async function POST(request: Request) {
+export const POST = withErrorHandling(async (request: Request) => {
   const ip = getClientIp(request);
   const rateLimit = checkRateLimit(`register:${ip}`, 10, 10 * 60 * 1000);
   if (!rateLimit.allowed) {
@@ -68,9 +69,21 @@ export async function POST(request: Request) {
     select: { id: true, name: true, email: true, role: true },
   });
 
+  // The account is already created at this point — a failure issuing
+  // the reward (e.g. generateCouponCode exhausting its retry budget)
+  // shouldn't turn an otherwise-successful registration into a 500 the
+  // client can't recover from (retrying would then hit "email already
+  // in use"). Worst case, the new user just doesn't get their reward
+  // and can be issued one manually later.
+  let referralApplied = false;
   if (referrer) {
-    await issueReferralReward(referrer.id, user.id);
+    try {
+      await issueReferralReward(referrer.id, user.id);
+      referralApplied = true;
+    } catch (err) {
+      console.error(`Failed to issue referral reward for new user ${user.id}:`, err);
+    }
   }
 
-  return Response.json({ user, referralApplied: Boolean(referrer) }, { status: 201 });
-}
+  return Response.json({ user, referralApplied }, { status: 201 });
+});

@@ -5,6 +5,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { formatBdt } from "@/lib/types/shop";
 
 // FEATURE: Type definition for order display
 interface OrderHistoryItem {
@@ -87,7 +88,7 @@ export function OrderHistory({ workerId }: OrderHistoryProps) {
           </div>
           {order.couponCode && (
             <p className="mt-1 text-xs font-medium text-green-700">
-              Coupon {order.couponCode} applied — saved ৳{order.discountBdt}
+              Coupon {order.couponCode} applied — saved {formatBdt(order.discountBdt)}
             </p>
           )}
         </div>

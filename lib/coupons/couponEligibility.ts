@@ -72,13 +72,17 @@ export function describeCouponEligibilityReason(
 ): string {
   switch (reason) {
     case "not_found":
-      return "That coupon code doesn't exist.";
+    case "not_yours":
+      // Same message for both, deliberately — distinguishing "doesn't
+      // exist" from "exists but is someone else's private coupon"
+      // would let /api/coupons/validate be used to probe whether a
+      // guessed/leaked code is a real, active coupon issued to
+      // another user.
+      return "That coupon code doesn't exist or isn't available on your account.";
     case "inactive":
       return "This coupon is no longer active.";
     case "expired":
       return "This coupon has expired.";
-    case "not_yours":
-      return "This coupon isn't available on your account.";
     case "below_minimum_order":
       return coupon?.minOrderBdt
         ? `Add at least ৳${coupon.minOrderBdt} to your cart to use this coupon.`

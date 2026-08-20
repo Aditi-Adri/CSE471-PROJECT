@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/authOptions";
 import { prisma } from "@/lib/db";
+import { checkCouponEligibility } from "@/lib/coupons/couponEligibility";
 import { withErrorHandling } from "@/lib/api/withErrorHandling";
 
 /**
@@ -28,11 +29,22 @@ export const GET = withErrorHandling(async () => {
     },
   });
 
-  const now = new Date();
+  // Reuses the exact same eligibility check checkout uses (see its own
+  // doc comment) rather than a second, ad hoc filter that could drift
+  // from it — orderTotalBdt is passed as Infinity since this is a
+  // listing, not a real cart: a coupon with a minimum spend is still
+  // "available", just not usable on every order.
   const usable = coupons
-    .filter((coupon) => !coupon.expiresAt || coupon.expiresAt > now)
-    .filter((coupon) => coupon.usageLimit == null || coupon._count.redemptions < coupon.usageLimit)
-    .filter((coupon) => coupon.redemptions.length < coupon.perUserLimit)
+    .filter(
+      (coupon) =>
+        checkCouponEligibility({
+          coupon,
+          userId,
+          orderTotalBdt: Number.POSITIVE_INFINITY,
+          totalRedemptions: coupon._count.redemptions,
+          userRedemptions: coupon.redemptions.length,
+        }).eligible
+    )
     .map((coupon) => ({
       code: coupon.code,
       discountType: coupon.discountType,
