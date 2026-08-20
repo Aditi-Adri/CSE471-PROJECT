@@ -7,18 +7,9 @@ import { getDhakaWeather } from "@/lib/weather/openMeteo";
 import { checkRateLimit, getClientIp } from "@/lib/auth/rateLimit";
 import { withErrorHandling } from "@/lib/api/withErrorHandling";
 
-/**
- * GET /api/opportunities
- *
- * The neighborhood demand heatmap (Module 2, Feature 2) — worker-only,
- * same as every other worker-facing dashboard endpoint in this app.
- * Ties together the three pieces built for this feature: real
- * per-area supply/demand scores (demandScore.ts), a free-tier AI
- * summary of them (opportunityInsight.ts, Groq), and real current
- * Dhaka weather as extra context (openMeteo.ts) — computed fresh on
- * every request rather than cached, since it's meant to reflect right
- * now, and the underlying queries are cheap aggregate counts.
- */
+// GET /api/opportunities
+// Worker-only. Returns the demand heatmap data (score per area), the
+// current Dhaka weather, and one AI-written sentence summarizing it.
 export const GET = withErrorHandling(async (request: Request) => {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
@@ -39,9 +30,8 @@ export const GET = withErrorHandling(async (request: Request) => {
     return Response.json({ error: "Too many requests. Please slow down." }, { status: 429 });
   }
 
-  // Areas and weather are independent — fetch in parallel — but the AI
-  // insight wants both as input (real weather as optional context, see
-  // opportunityInsight.ts), so it has to wait for them.
+  // Areas and weather don't depend on each other, so fetch both at
+  // once. The AI insight needs both results, so it waits for them.
   const [areas, weather] = await Promise.all([getOpportunityAreas(), getDhakaWeather()]);
   const insight = await getOpportunityInsight(areas, weather);
 

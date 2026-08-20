@@ -5,16 +5,13 @@ import { prisma } from "@/lib/db";
 import { buyPartsSchema } from "@/lib/validation/jobRequestSchema";
 import { withErrorHandling } from "@/lib/api/withErrorHandling";
 
-/**
- * POST /api/job-requests/[id]/parts
- * body: { items: [{ partId, quantity }] }
- *
- * The hired worker buys parts (tester, wiring, whatever) while doing
- * the job. Cost gets added to this job's bill instead of the worker
- * paying for it themselves — the customer pays wage + parts together.
- * Only the worker who was actually hired for this job can buy parts
- * on it.
- */
+// POST /api/job-requests/[id]/parts
+// body: { items: [{ partId, quantity }] }
+//
+// The hired worker buys parts while doing the job. The cost gets
+// added to this job's bill — the customer pays the wage and the
+// parts together. Only the worker who was actually hired for this
+// job is allowed to buy parts on it.
 export const POST = withErrorHandling(async (request: Request, { params }: { params: Promise<{ id: string }> }) => {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
@@ -37,11 +34,12 @@ export const POST = withErrorHandling(async (request: Request, { params }: { par
       { status: 400 }
     );
   }
+  const itemsToBuy = parsed.data.items;
 
-  const { id } = await params;
+  const { id: jobRequestId } = await params;
 
   const jobRequest = await prisma.jobRequest.findUnique({
-    where: { id },
+    where: { id: jobRequestId },
     select: { hiredWorkerId: true },
   });
   if (!jobRequest) {
@@ -51,12 +49,22 @@ export const POST = withErrorHandling(async (request: Request, { params }: { par
     return Response.json({ error: "You're not the hired worker on this job." }, { status: 403 });
   }
 
-  const partIds = parsed.data.items.map((i) => i.partId);
+  // Look up every part being bought, so we can check stock and prices.
+  const partIds = [];
+  for (const item of itemsToBuy) {
+    partIds.push(item.partId);
+  }
   const parts = await prisma.part.findMany({ where: { id: { in: partIds } } });
-  const partMap = new Map(parts.map((p) => [p.id, p]));
 
-  for (const item of parsed.data.items) {
-    const part = partMap.get(item.partId);
+  // Build a quick lookup: part id -> the part's real data.
+  const partsById = new Map();
+  for (const part of parts) {
+    partsById.set(part.id, part);
+  }
+
+  // Check every item is a real part with enough stock, before buying anything.
+  for (const item of itemsToBuy) {
+    const part = partsById.get(item.partId);
     if (!part) {
       return Response.json({ error: "One of those parts doesn't exist." }, { status: 404 });
     }
@@ -65,11 +73,22 @@ export const POST = withErrorHandling(async (request: Request, { params }: { par
     }
   }
 
-  // Decrement stock + create the order in one transaction, so a
-  // failure partway through doesn't leave stock decremented with no
-  // order to show for it.
+  // Build the order items list with real prices, before saving.
+  const orderItems: { partId: string; quantity: number; price: number }[] = [];
+  for (const item of itemsToBuy) {
+    const part = partsById.get(item.partId);
+    orderItems.push({
+      partId: item.partId,
+      quantity: item.quantity,
+      price: part.price,
+    });
+  }
+
+  // Decrement stock and create the order in one transaction, so a
+  // failure partway through can't leave stock reduced with no order
+  // to show for it.
   await prisma.$transaction(async (tx) => {
-    for (const item of parsed.data.items) {
+    for (const item of itemsToBuy) {
       await tx.part.update({
         where: { id: item.partId },
         data: { stockQty: { decrement: item.quantity } },
@@ -78,15 +97,9 @@ export const POST = withErrorHandling(async (request: Request, { params }: { par
 
     await tx.partOrder.create({
       data: {
-        jobRequestId: id,
+        jobRequestId,
         workerId: worker.id,
-        items: {
-          create: parsed.data.items.map((item) => ({
-            partId: item.partId,
-            quantity: item.quantity,
-            price: partMap.get(item.partId)!.price,
-          })),
-        },
+        items: { create: orderItems },
       },
     });
   });

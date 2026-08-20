@@ -2,20 +2,11 @@ import { distanceKm } from "@/lib/geo";
 import { DHAKA_AREA_COORDS } from "@/lib/constants/dhakaAreaCoords";
 import type { DhakaArea } from "@/app/generated/prisma/client";
 
-/**
- * The pure half of the neighborhood demand heatmap's scoring logic —
- * no `@/lib/db` import on purpose, same reason lib/search/
- * buildWorkerQuery.ts keeps query-building separate from the Prisma
- * client: it's what makes demandScore.test.ts runnable with no
- * database/env setup at all. See demandScore.ts for the part that
- * actually queries the database and calls these functions.
- */
+// The math for the demand heatmap score. Kept separate from
+// demandScore.ts so it can be unit-tested with no database needed.
 
-// How much each signal counts toward "demand." JobRequest is weighted
-// highest because it's an explicit, unambiguous request a human typed;
-// SosRequest next because it's urgent even though transient; Booking
-// and the failed-search signal are the softest (routine and
-// automatic, respectively).
+// How much each signal counts toward "demand". A direct job request
+// counts the most, an SOS call next, bookings and failed searches least.
 export const WEIGHTS = {
   openJobRequests: 3,
   recentSosRequests: 2,
@@ -25,58 +16,64 @@ export const WEIGHTS = {
 
 export const RECENT_DAYS = 30;
 
-/** Snaps a real lat/lng to the closest of the 22 neighborhood centroids. */
+// Finds which of the 22 Dhaka neighborhoods a lat/lng point is closest to.
 export function nearestArea(lat: number, lng: number): DhakaArea {
-  let best: DhakaArea = "GULSHAN";
-  let bestDist = Infinity;
-  for (const [area, coord] of Object.entries(DHAKA_AREA_COORDS) as [DhakaArea, { lat: number; lng: number }][]) {
-    const d = distanceKm(lat, lng, coord.lat, coord.lng);
-    if (d < bestDist) {
-      bestDist = d;
-      best = area;
+  let closestArea: DhakaArea = "GULSHAN";
+  let closestDistance = Infinity;
+
+  for (const area in DHAKA_AREA_COORDS) {
+    const areaKey = area as DhakaArea;
+    const coord = DHAKA_AREA_COORDS[areaKey];
+    const distance = distanceKm(lat, lng, coord.lat, coord.lng);
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      closestArea = areaKey;
     }
   }
-  return best;
+
+  return closestArea;
 }
 
+// Counts how many points fall nearest to each area.
 export function bucketByNearestArea(points: { lat: number; lng: number }[]): Map<DhakaArea, number> {
   const counts = new Map<DhakaArea, number>();
-  for (const p of points) {
-    const area = nearestArea(p.lat, p.lng);
-    counts.set(area, (counts.get(area) ?? 0) + 1);
+  for (const point of points) {
+    const area = nearestArea(point.lat, point.lng);
+    const currentCount = counts.get(area) ?? 0;
+    counts.set(area, currentCount + 1);
   }
   return counts;
 }
 
-/**
- * Drops points that share an exact (lat, lng) beyond a small
- * threshold. Real GPS fixes from distinct real addresses essentially
- * never coincide to 5 decimal places (~1m) at any volume — a large
- * exact-duplicate cluster is a hardcoded fallback/test coordinate
- * (e.g. a dev browser's default location when Geolocation permission
- * was never granted during testing), not real demand. Found via a
- * live check against the shared dev DB: one point repeated 45+ times
- * in Booking and 25+ times in SosRequest. Filtering by "suspiciously
- * exact duplicate" rather than hardcoding that one coordinate keeps
- * this general enough to catch any future artifact of the same shape.
- */
-export function filterPlausibleLocations<T extends { lat: number; lng: number }>(
-  points: T[],
+// Removes fake/test GPS points. A real address almost never shares the
+// exact same lat/lng (to 5 decimals) as many other points — if a point
+// repeats too often, it's a test/default location, not real demand.
+export function filterPlausibleLocations(
+  points: { lat: number; lng: number }[],
   maxExactDuplicates = 3
-): T[] {
-  const key = (p: T) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`;
+): { lat: number; lng: number }[] {
   const counts = new Map<string, number>();
-  for (const p of points) counts.set(key(p), (counts.get(key(p)) ?? 0) + 1);
-  return points.filter((p) => (counts.get(key(p)) ?? 0) <= maxExactDuplicates);
+  for (const point of points) {
+    const key = `${point.lat.toFixed(5)},${point.lng.toFixed(5)}`;
+    const currentCount = counts.get(key) ?? 0;
+    counts.set(key, currentCount + 1);
+  }
+
+  const plausiblePoints = [];
+  for (const point of points) {
+    const key = `${point.lat.toFixed(5)},${point.lng.toFixed(5)}`;
+    const count = counts.get(key) ?? 0;
+    if (count <= maxExactDuplicates) {
+      plausiblePoints.push(point);
+    }
+  }
+  return plausiblePoints;
 }
 
-/**
- * Score = weighted demand ÷ (available workers + 1). Dividing by
- * supply (not just ranking raw demand) is the whole point — an area
- * with 10 requests and 20 workers isn't "hot," one with 3 requests and
- * 0 workers is. The +1 avoids a division by zero for an area with no
- * workers at all, which is exactly the case we most want to surface.
- */
+// Score = weighted demand divided by (available workers + 1).
+// Dividing by supply matters: an area with 10 requests and 20 workers
+// isn't a shortage, but 3 requests and 0 workers is. The +1 just
+// avoids dividing by zero when an area has no workers at all.
 export function computeShortageScore(counts: {
   openJobRequests: number;
   recentSosRequests: number;

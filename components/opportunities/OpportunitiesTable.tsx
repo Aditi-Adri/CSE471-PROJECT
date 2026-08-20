@@ -4,12 +4,8 @@ import Link from "next/link";
 import type { DhakaArea } from "@/app/generated/prisma/client";
 import type { OpportunityAreaData } from "./types";
 
-/**
- * The accessible, no-map-required half of /dashboard/opportunities —
- * same ranked data as the heatmap, as plain rows. Clicking a row syncs
- * the map's selection (see OpportunitiesView), and "Browse jobs" jumps
- * straight into the existing apply flow, area-filtered.
- */
+// Same area data as the heatmap, shown as a plain table instead of a
+// map. Clicking a row selects that area (synced with the map above).
 export function OpportunitiesTable({
   areas,
   selectedArea,

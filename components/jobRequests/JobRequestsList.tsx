@@ -19,7 +19,7 @@ type JobRequestItem = {
   hasApplied: boolean;
 };
 
-/** A flat job budget, not an hourly rate — so no "/hr" suffix here, unlike a Worker's rate range. */
+// A flat job budget, not an hourly rate — no "/hr" suffix here.
 function formatBudget(minBdt: number | null, maxBdt: number | null): string | null {
   if (minBdt && maxBdt) return `${formatBdt(minBdt)}–${formatBdt(maxBdt)}`;
   if (minBdt) return `From ${formatBdt(minBdt)}`;
@@ -27,26 +27,10 @@ function formatBudget(minBdt: number | null, maxBdt: number | null): string | nu
   return null;
 }
 
-/**
- * The worker-facing browse/apply list at /dashboard/job-requests — the
- * mirror image of the customer's search: same "filter by area" idea,
- * pointed at open JobRequests instead of Workers. Any number of
- * workers can apply to the same request, so it stays listed here for
- * everyone else until the customer hires someone (see
- * /dashboard/my-applications for what happens after applying).
- *
- * Pre-fills the area filter from `?area=` if present — how the
- * opportunities heatmap's "Browse jobs here" links land you already
- * filtered instead of on the unfiltered full list. The URL is the one
- * source of truth for the filter (not local state mirroring it):
- * clicking from one area's heatmap link to another's is a client-side
- * navigation on the *same* route, so the component doesn't remount —
- * a `useState` initialized once from the URL would only ever pick up
- * the very first area you clicked and silently keep filtering by that
- * one forever after. Reading `area` straight from `useSearchParams`
- * on every render avoids that entirely; the dropdown updates the URL
- * (via `router.replace`) instead of a separate state variable.
- */
+// The worker-facing browse/apply list at /dashboard/job-requests, with
+// an area filter. The filter reads straight from the URL (`?area=`)
+// instead of its own state, so a heatmap "Browse jobs here" link can
+// change the filter without needing the page to reload.
 export function JobRequestsList() {
   const searchParams = useSearchParams();
   const router = useRouter();

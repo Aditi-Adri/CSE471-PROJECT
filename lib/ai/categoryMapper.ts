@@ -8,20 +8,10 @@ export type CategoryMapResult = {
   method: "AI" | "KEYWORD";
 };
 
-/**
- * Maps free-text customer input ("water tap is leaking in kitchen") to a
- * known ServiceCategory.
- *
- * Two-tier strategy:
- *   1. If GROQ_API_KEY is configured, try the free Groq API first.
- *   2. Otherwise — or if that call fails/times out/is inconclusive —
- *      fall back to the local keyword engine, which is free, instant,
- *      and has no external dependency at all.
- *
- * This keeps the feature fully functional (and fast) out of the box with
- * zero configuration, while still satisfying the "send it to an AI API"
- * requirement once a teammate drops in a free key.
- */
+// Maps free text ("water tap is leaking in kitchen") to a known
+// ServiceCategory. Tries the free Groq AI first if a key is set; if
+// that fails or isn't configured, falls back to the local keyword
+// engine — so search always works, with or without an API key.
 export async function mapQueryToCategory(
   query: string,
   categories: readonly CategoryForMatching[]

@@ -6,16 +6,12 @@ import { applyToJobSchema } from "@/lib/validation/jobRequestSchema";
 import { checkRateLimit, getClientIp } from "@/lib/auth/rateLimit";
 import { withErrorHandling } from "@/lib/api/withErrorHandling";
 
-/**
- * POST /api/job-requests/[id]/apply
- * body: { wageBdt }
- *
- * A worker expressing interest in an OPEN request, with the wage
- * they're asking for. Any number of workers can apply to the same
- * request — this just adds a JobRequestApplication row, the request
- * itself stays OPEN and visible until the customer hires someone via
- * POST .../hire.
- */
+// POST /api/job-requests/[id]/apply
+// body: { wageBdt }
+// A worker applies to an open job request with the wage they want.
+// The wage must fall inside the customer's budget, or the application
+// is rejected. Any number of workers can apply — the request stays
+// open until the customer hires one of them.
 export const POST = withErrorHandling(async (request: Request, { params }: { params: Promise<{ id: string }> }) => {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
@@ -49,7 +45,7 @@ export const POST = withErrorHandling(async (request: Request, { params }: { par
 
   const jobRequest = await prisma.jobRequest.findUnique({
     where: { id },
-    select: { status: true },
+    select: { status: true, budgetMinBdt: true, budgetMaxBdt: true },
   });
   if (!jobRequest) {
     return Response.json({ error: "This request doesn't exist." }, { status: 404 });
@@ -58,13 +54,30 @@ export const POST = withErrorHandling(async (request: Request, { params }: { par
     return Response.json({ error: "This request is no longer open." }, { status: 409 });
   }
 
+  // The wage a worker asks for must fall inside the customer's budget.
+  // Either side of the budget is optional, so only check the sides that
+  // were actually set.
+  const wageBdt = parsed.data.wageBdt;
+  if (jobRequest.budgetMinBdt !== null && wageBdt < jobRequest.budgetMinBdt) {
+    return Response.json(
+      { error: `Your wage doesn't match this job's budget — it's below the minimum of ${jobRequest.budgetMinBdt} BDT.` },
+      { status: 400 }
+    );
+  }
+  if (jobRequest.budgetMaxBdt !== null && wageBdt > jobRequest.budgetMaxBdt) {
+    return Response.json(
+      { error: `Your wage doesn't match this job's budget — it's above the maximum of ${jobRequest.budgetMaxBdt} BDT.` },
+      { status: 400 }
+    );
+  }
+
   try {
     await prisma.jobRequestApplication.create({
-      data: { jobRequestId: id, workerId: worker.id, wageBdt: parsed.data.wageBdt },
+      data: { jobRequestId: id, workerId: worker.id, wageBdt },
     });
   } catch (err) {
-    // Unique constraint on [jobRequestId, workerId] — already applied.
-    // Not an error the worker needs to see as a failure.
+    // This worker already applied before (unique constraint hit) —
+    // that's fine, not a real error.
     if (err && typeof err === "object" && "code" in err && err.code === "P2002") {
       return Response.json({ status: "APPLIED" });
     }
