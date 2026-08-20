@@ -36,7 +36,26 @@ model User {
   /// only after a booking is confirmed (arrival-code match), never
   /// before — see docs/FEATURE_SPEC.md's booking-flow section.
   address             String?
+  /// MODULE 4 (Shiva): this user's own code to share — see Coupon
+  /// below. Generated lazily on first view (lib/referrals/referralCode.ts),
+  /// not at signup, so every account gets one without touching every
+  /// place a User row can be created (credentials register + Google
+  /// SSO via the NextAuth adapter).
+  referralCode        String?                @unique
+  /// Who this user signed up with the referral code of, if anyone —
+  /// set once, at registration, from lib/validation/authSchemas.ts'
+  /// optional `referralCode` field. Self-relation, not a separate
+  /// join table: a user is referred by at most one other user, ever.
+  referredById        String?
+  referredBy          User?                  @relation("UserReferrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals           User[]                 @relation("UserReferrals")
   accounts            Account[]
+  /// Coupons an admin created — see Coupon below.
+  createdCoupons      Coupon[]               @relation("CouponCreatedBy")
+  /// Private coupons issued straight to this user (e.g. a referral
+  /// reward) — see Coupon.issuedToUserId below.
+  issuedCoupons       Coupon[]               @relation("CouponIssuedTo")
+  couponRedemptions   CouponRedemption[]
   /// Workers this customer has starred - see Favorite below.
   favorites           Favorite[]
   /// Requests this user posted when a search came up with no matching
@@ -615,13 +634,13 @@ model Item {
 /// enforced, same "loose reference" the original migration shipped
 /// with.
 model Order {
-  id            Int           @id @default(autoincrement())
-  workerId      String
-  worker        User          @relation(fields: [workerId], references: [id], onDelete: Cascade)
-  jobId         String?
-  totalAmount   Decimal       @db.Decimal(10, 2)
-  createdAt     DateTime      @default(now())
-  items         OrderItem[]
+  id               Int               @id @default(autoincrement())
+  workerId         String
+  worker           User              @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  jobId            String?
+  totalAmount      Decimal           @db.Decimal(10, 2)
+  createdAt        DateTime          @default(now())
+  items            OrderItem[]
   /// =====================================================================
   /// MODULE 3 (Shiva): SSLCommerz sandbox payment integration for the
   /// Spare Parts Shop checkout.
@@ -636,11 +655,17 @@ model Order {
   /// trusted on its own. See lib/payments/sslcommerz.ts for why this is
   /// optional/graceful-fallback, same free-APIs-only pattern as Groq.
   /// =====================================================================
-  paymentStatus PaymentStatus @default(PENDING)
-  tranId        String        @unique
-  valId         String?
-  cardType      String?
-  paidAt        DateTime?
+  paymentStatus    PaymentStatus     @default(PENDING)
+  tranId           String            @unique
+  valId            String?
+  cardType         String?
+  paidAt           DateTime?
+  /// MODULE 4 (Shiva): how much a coupon knocked off this order's item
+  /// total — see Coupon below. totalAmount above is already net of
+  /// this (what's actually charged); this field is only kept so the
+  /// bill can still show "you saved ৳X" without re-deriving it.
+  discountBdt      Int               @default(0)
+  couponRedemption CouponRedemption?
 
   @@index([workerId])
   @@index([jobId])
@@ -661,6 +686,83 @@ model OrderItem {
 
   @@index([orderId])
   @@index([itemId])
+}
+
+/// MODULE 4 (Shiva): referral codes + coupon system for the Spare Parts
+/// Shop checkout (app/api/shop/orders — the one real payment flow in
+/// the app; see lib/payments/sslcommerz.ts).
+///
+/// A Coupon is either admin-made (source: ADMIN, public unless someone
+/// sets issuedToUserId) or system-issued as a referral reward (source:
+/// REFERRAL, always private — issuedToUserId is the one person who can
+/// redeem it). Both go through the same redemption path:
+/// lib/coupons/couponEligibility.ts decides if a code is usable right
+/// now, lib/coupons/couponMath.ts turns it into a taka amount off, and
+/// a CouponRedemption row is what actually enforces "not twice" — see
+/// app/api/shop/orders/route.ts for where a code gets spent for real.
+model Coupon {
+  id             String             @id @default(cuid())
+  code           String             @unique
+  discountType   CouponDiscountType
+  /// PERCENT: 1-100 (percent off). FIXED: a flat BDT amount off.
+  /// Which one `value` means depends on discountType.
+  value          Int
+  /// Caps a PERCENT discount in taka so "50% off" can't blow up on a
+  /// large order. Ignored for FIXED. Null = uncapped.
+  maxDiscountBdt Int?
+  /// Order subtotal must be at least this before the coupon applies.
+  /// Null = no minimum.
+  minOrderBdt    Int?
+  /// Total redemptions allowed across every user. Null = unlimited.
+  usageLimit     Int?
+  /// Redemptions allowed per user. Almost always 1 — a referral reward
+  /// is inherently single-use since it's issued to one person.
+  perUserLimit   Int                @default(1)
+  isActive       Boolean            @default(true)
+  expiresAt      DateTime?
+  source         CouponSource       @default(ADMIN)
+  /// Set only for a private, single-user coupon (referral rewards
+  /// always set this). Null = public, anyone signed in can apply it.
+  issuedToUserId String?
+  issuedToUser   User?              @relation("CouponIssuedTo", fields: [issuedToUserId], references: [id], onDelete: Cascade)
+  /// The admin who created this, via /admin/coupons. Null for a
+  /// referral-issued coupon — nobody typed it in by hand.
+  createdById    String?
+  createdBy      User?              @relation("CouponCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime           @default(now())
+  redemptions    CouponRedemption[]
+
+  @@index([isActive])
+  @@index([issuedToUserId])
+}
+
+/// One coupon actually being spent on one order. Exists mainly so
+/// "has this user already used this code" and "how many times has
+/// this code been used, total" are real counts instead of trusting
+/// the client — see checkCouponEligibility in
+/// lib/coupons/couponEligibility.ts.
+model CouponRedemption {
+  id          String   @id @default(cuid())
+  couponId    String
+  coupon      Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId     Int      @unique
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  discountBdt Int
+  redeemedAt  DateTime @default(now())
+
+  @@index([couponId, userId])
+}
+
+enum CouponDiscountType {
+  PERCENT
+  FIXED
+}
+
+enum CouponSource {
+  ADMIN
+  REFERRAL
 }
 
 enum Role {
