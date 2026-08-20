@@ -4,6 +4,10 @@ import { authOptions } from "@/lib/auth/authOptions";
 import { prisma } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { initiateSslcommerzPayment, isSslcommerzConfigured } from "@/lib/payments/sslcommerz";
+import { loadCouponEligibility } from "@/lib/coupons/loadCouponEligibility";
+import { computeDiscountBdt } from "@/lib/coupons/couponMath";
+import { describeCouponEligibilityReason } from "@/lib/coupons/couponEligibility";
+import { CouponError } from "@/lib/coupons/CouponError";
 
 // FEATURE: Request type for order creation
 interface OrderItemRequest {
@@ -14,6 +18,10 @@ interface OrderItemRequest {
 interface CreateOrderRequest {
   jobId?: string;
   items: OrderItemRequest[];
+  // MODULE 4 (Shiva): optional coupon applied at checkout — see
+  // lib/coupons/couponEligibility.ts. Re-checked here from scratch
+  // (never trusts a discount amount computed client-side).
+  couponCode?: string;
 }
 
 export async function POST(req: NextRequest) {
@@ -30,7 +38,7 @@ export async function POST(req: NextRequest) {
     const workerId = session.user.id;
 
     const body: CreateOrderRequest = await req.json();
-    const { jobId, items } = body;
+    const { jobId, items, couponCode } = body;
 
     // FEATURE: Validate input
     if (!items || items.length === 0) {
@@ -97,12 +105,12 @@ export async function POST(req: NextRequest) {
       }
 
       // FEATURE: Calculate total amount
-      let totalAmount = 0;
+      let subtotalAmount = 0;
       const orderItemsData = items.map((orderItem) => {
         const dbItem = itemMap.get(orderItem.itemId)!;
         // `price` is a Prisma Decimal — multiply with Decimal.mul, not `*`
         const subtotal = dbItem.price.mul(orderItem.quantity);
-        totalAmount = totalAmount + Number(subtotal);
+        subtotalAmount = subtotalAmount + Number(subtotal);
         return {
           itemId: orderItem.itemId,
           itemName: dbItem.name,
@@ -112,12 +120,34 @@ export async function POST(req: NextRequest) {
         };
       });
 
+      // MODULE 4 (Shiva): re-validate the coupon server-side, from the
+      // real redemption count, rather than trusting whatever discount
+      // the client showed after calling /api/coupons/validate earlier
+      // — that call is only ever a preview. Known limitation: this
+      // still isn't airtight against two truly simultaneous submits
+      // from the same account both reading the count before either
+      // commits (Postgres' default READ COMMITTED doesn't block that);
+      // the UI's disabled-while-submitting button covers the realistic
+      // case (an accidental double-click), not a deliberate race.
+      let discountBdt = 0;
+      let couponId: string | null = null;
+      if (couponCode) {
+        const { coupon, eligibility } = await loadCouponEligibility(tx, couponCode, workerId, subtotalAmount);
+        if (!eligibility.eligible) {
+          throw new CouponError(eligibility.reason, describeCouponEligibilityReason(eligibility.reason, coupon));
+        }
+        discountBdt = computeDiscountBdt(coupon!, subtotalAmount);
+        couponId = coupon!.id;
+      }
+      const totalAmount = subtotalAmount - discountBdt;
+
       // FEATURE: Step 4: Create order row
       const order = await tx.order.create({
         data: {
           workerId,
           jobId: jobId || null,
           totalAmount: totalAmount,
+          discountBdt,
           tranId,
           paymentStatus: willUseGateway ? "PENDING" : "PAID",
           paidAt: willUseGateway ? null : new Date(),
@@ -135,6 +165,15 @@ export async function POST(req: NextRequest) {
           subtotal: item.subtotal,
         })),
       });
+
+      // MODULE 4 (Shiva): the actual spend — this row (unique on
+      // orderId) is what "already used this code" counts against for
+      // next time.
+      if (couponId) {
+        await tx.couponRedemption.create({
+          data: { couponId, userId: workerId, orderId: order.id, discountBdt },
+        });
+      }
 
       return { order, itemsCount: createdOrderItems.count };
     });
@@ -184,10 +223,18 @@ export async function POST(req: NextRequest) {
       message: paymentUrl ? "Redirecting to payment gateway" : "Order confirmed and added to bill",
       orderId: result.order.id,
       totalAmount: result.order.totalAmount,
+      discountBdt: result.order.discountBdt,
       itemsCount: result.itemsCount,
       paymentUrl,
     });
   } catch (error) {
+    // MODULE 4 (Shiva): a coupon that was fine when previewed but
+    // isn't valid anymore by the time the order is actually placed
+    // (expired, someone else used up the last redemption, etc.) — a
+    // normal, expected outcome, not a server error.
+    if (error instanceof CouponError) {
+      return NextResponse.json({ error: error.message, couponReason: error.reason }, { status: 400 });
+    }
     console.error("Error creating order:", error);
     return NextResponse.json({ error: "Failed to create order" }, { status: 500 });
   }

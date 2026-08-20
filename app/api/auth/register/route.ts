@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth/passwords";
 import { checkRateLimit, getClientIp } from "@/lib/auth/rateLimit";
 import { registerSchema } from "@/lib/validation/authSchemas";
+import { issueReferralReward } from "@/lib/referrals/issueReferralReward";
 
 /**
  * POST /api/auth/register
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { name, email, phone, password, role } = parsed.data;
+  const { name, email, phone, password, role, referralCode } = parsed.data;
   const normalizedPhone = phone ? phone : null;
 
   const existingEmail = await prisma.user.findUnique({ where: { email } });
@@ -52,12 +53,24 @@ export async function POST(request: Request) {
     }
   }
 
+  // MODULE 4 (Shiva): an unknown/mistyped referral code doesn't block
+  // sign-up — it just means no referral reward gets issued. Looked up
+  // before creating the account so a typo can't ever end up "referred
+  // by yourself".
+  const referrer = referralCode
+    ? await prisma.user.findUnique({ where: { referralCode }, select: { id: true } })
+    : null;
+
   const passwordHash = await hashPassword(password);
 
   const user = await prisma.user.create({
-    data: { name, email, phone: normalizedPhone, passwordHash, role },
+    data: { name, email, phone: normalizedPhone, passwordHash, role, referredById: referrer?.id ?? null },
     select: { id: true, name: true, email: true, role: true },
   });
 
-  return Response.json({ user }, { status: 201 });
+  if (referrer) {
+    await issueReferralReward(referrer.id, user.id);
+  }
+
+  return Response.json({ user, referralApplied: Boolean(referrer) }, { status: 201 });
 }
