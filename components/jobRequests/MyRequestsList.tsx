@@ -59,14 +59,8 @@ function WorkerSummary({ worker }: { worker: ApplicantWorker }) {
   );
 }
 
-/**
- * The customer's own posted requests — /dashboard/my-requests. While a
- * request is OPEN, this is where the customer reviews every worker who
- * applied — full profile, rating, verification — and hires exactly one.
- * There's no push/email notification (that's Module 3's unbuilt chat
- * feature), so checking here *is* the notification for now, both for
- * "someone applied" and for confirming who got hired.
- */
+// The customer's own posted requests. While a request is OPEN, the
+// customer reviews everyone who applied here and hires exactly one.
 export function MyRequestsList() {
   const [requests, setRequests] = useState<MyRequestItem[] | null>(null);
   const [hiring, setHiring] = useState<string | null>(null); // `${jobRequestId}:${workerId}`

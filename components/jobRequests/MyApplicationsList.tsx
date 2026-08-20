@@ -46,14 +46,8 @@ function statusBadge(app: MyApplicationItem["jobRequest"]) {
   };
 }
 
-/**
- * The worker's own applications — /dashboard/my-applications. Since
- * there's no push/email notification system, this page (checked
- * manually) is how a worker finds out whether they got hired. Once
- * hired, the customer's name and phone number show up right here —
- * withheld before that, and withheld from every other applicant who
- * wasn't picked.
- */
+// The worker's own applications, and whether each one got hired. Once
+// hired, the customer's contact info shows up here too.
 export function MyApplicationsList() {
   const [applications, setApplications] = useState<MyApplicationItem[] | null>(null);
 
@@ -81,11 +75,12 @@ export function MyApplicationsList() {
 
   return (
     <div className="flex flex-col gap-3">
-      {applications.map(({ id, wageBdt, jobRequest: r }) => {
+      {applications.map((application) => {
+        const r = application.jobRequest;
         const badge = statusBadge(r);
         return (
           <div
-            key={id}
+            key={application.id}
             className="flex flex-col gap-3 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
           >
             <div className="flex items-start justify-between gap-3">
@@ -97,7 +92,7 @@ export function MyApplicationsList() {
 
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
               <span>📍 {AREA_LABEL_BY_VALUE.get(r.area) ?? r.area}</span>
-              <span>Your wage: {formatBdt(wageBdt)}</span>
+              <span>Your wage: {formatBdt(application.wageBdt)}</span>
             </div>
 
             {r.hired && r.customer && (
@@ -115,7 +110,7 @@ export function MyApplicationsList() {
                 </div>
 
                 <div className="text-xs text-zinc-600 dark:text-zinc-300">
-                  <p>Wage: {formatBdt(wageBdt)}</p>
+                  <p>Wage: {formatBdt(application.wageBdt)}</p>
                   {r.partsTotalBdt > 0 && <p>Parts bought: {formatBdt(r.partsTotalBdt)}</p>}
                   <p className="font-semibold">Customer&apos;s total bill: {formatBdt(r.totalBillBdt)}</p>
                 </div>

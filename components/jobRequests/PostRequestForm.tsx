@@ -4,13 +4,9 @@ import { useState } from "react";
 import { DHAKA_AREAS } from "@/lib/constants/dhakaAreas";
 import { inputClasses, primaryButtonClasses, errorBannerClasses, successBannerClasses } from "@/lib/ui/formStyles";
 
-/**
- * The form a customer fills in when a search comes up with no matching
- * category — see the "not available" state in SearchExperience.tsx,
- * which is the only place this renders. Posts to /api/job-requests;
- * on success, that request becomes visible to workers browsing
- * /dashboard/job-requests.
- */
+// The form a customer fills in when a search finds no matching
+// category. Posts to /api/job-requests, and the request then shows up
+// for workers browsing /dashboard/job-requests.
 export function PostRequestForm({ initialDescription }: { initialDescription: string }) {
   const [description, setDescription] = useState(initialDescription);
   const [area, setArea] = useState("");

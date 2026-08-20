@@ -7,17 +7,10 @@ import { checkRateLimit, getClientIp } from "@/lib/auth/rateLimit";
 import { withErrorHandling } from "@/lib/api/withErrorHandling";
 import type { DhakaArea } from "@/app/generated/prisma/client";
 
-/**
- * GET /api/job-requests?area=...
- *
- * Open (not yet filled) job requests, newest first — the list a worker
- * browses on /dashboard/job-requests. Stays visible to every worker
- * until the customer hires someone (status flips to HIRED), not until
- * the first application — any number of workers can apply. Signed-in
- * only (any role can technically call this; only the worker-only
- * /dashboard page links to it), same "must be signed in" bar as the
- * rest of the account area.
- */
+// GET /api/job-requests?area=...
+// The list of still-open job requests a worker can apply to. Stays
+// visible until the customer hires someone, not just until the first
+// application — any number of workers can apply to the same job.
 export const GET = withErrorHandling(async (request: Request) => {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
@@ -60,23 +53,33 @@ export const GET = withErrorHandling(async (request: Request) => {
     },
   });
 
-  const shaped = requests.map(({ applications, _count, ...rest }) => ({
-    ...rest,
-    applicantCount: _count.applications,
-    hasApplied: worker ? applications.length > 0 : false,
-  }));
+  // Reshape each request into the simple fields the page needs.
+  const shapedRequests = [];
+  for (const request of requests) {
+    let hasApplied = false;
+    if (worker && request.applications.length > 0) {
+      hasApplied = true;
+    }
 
-  return Response.json({ requests: shaped });
+    shapedRequests.push({
+      id: request.id,
+      description: request.description,
+      area: request.area,
+      budgetMinBdt: request.budgetMinBdt,
+      budgetMaxBdt: request.budgetMaxBdt,
+      createdAt: request.createdAt,
+      customer: request.customer,
+      applicantCount: request._count.applications,
+      hasApplied,
+    });
+  }
+
+  return Response.json({ requests: shapedRequests });
 });
 
-/**
- * POST /api/job-requests
- *
- * A customer posting what they need — the fallback offered when a
- * search comes up with no matching category (see
- * components/search/SearchExperience.tsx). Rate-limited the same way
- * as the other write-heavy account/search endpoints.
- */
+// POST /api/job-requests
+// A customer posts what they need — this is the fallback offered when
+// a search doesn't match any category.
 export const POST = withErrorHandling(async (request: Request) => {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
