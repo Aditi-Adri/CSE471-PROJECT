@@ -52,6 +52,9 @@ model User {
   tier2Evaluations    Tier2SkillTest[]       @relation("Tier2Evaluator")
   tier3Reviews        Tier3PoliceClearance[] @relation("Tier3Reviewer")
   worker              Worker?
+  /// MODULE 3 -> FEATURE 3 (Corporate Portal): named property addresses
+  /// managed by a CORPORATE user — see CorporateProperty below.
+  corporateProperties CorporateProperty[]    @relation("CorporateProperties")
 
   @@index([role])
 }
@@ -307,9 +310,23 @@ model Booking {
   /// measured from here, same reasoning as respondedAt above.
   completedAt        DateTime?
   review             Review?
+  /// =====================================================================
+  /// MODULE 3 -> FEATURE 3 (Corporate Portal): corporate-tagged bookings.
+  ///
+  /// When a CORPORATE user books a technician for one of their managed
+  /// properties, `isCorporateBill` is set true and the property id is
+  /// recorded so the monthly invoice can aggregate costs per-property.
+  /// `requestedByRole` is a snapshot of the booker's role at the time —
+  /// kept as a plain string, not a Role enum, because the booking record
+  /// must survive even if roles evolve later.
+  /// =====================================================================
+  isCorporateBill     Boolean       @default(false)
+  requestedByRole     String?
+  corporatePropertyId String?
 
   @@index([workerId])
   @@index([customerId])
+  @@index([isCorporateBill])
 }
 
 /// Emergency SOS requests within a 3km radius (Module 1 F3, Jishan).
@@ -595,6 +612,32 @@ model OrderItem {
 
   @@index([orderId])
   @@index([itemId])
+}
+
+// =====================================================================
+// MODULE 3 -> FEATURE 3 (Corporate Portal): multi-property management.
+//
+// A CORPORATE user can register several office/building addresses under
+// their account.  Each property can be independently selected when
+// placing a maintenance booking, and the monthly invoice groups costs
+// by property.  `label` is the user-facing nickname ("Banani Building"),
+// `address` is the full street address snapshot used for the service
+// visit, `area` controls which Dhaka zone the technician search is
+// scoped to.
+// =====================================================================
+model CorporateProperty {
+  id              String    @id @default(cuid())
+  corporateUserId String
+  corporateUser   User      @relation("CorporateProperties", fields: [corporateUserId], references: [id], onDelete: Cascade)
+  label           String
+  address         String
+  area            DhakaArea
+  contactName     String?
+  contactPhone    String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([corporateUserId])
 }
 
 enum Role {

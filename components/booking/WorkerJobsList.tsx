@@ -31,8 +31,49 @@ const STATUS_LABEL: Record<string, string> = {
   COMPLETED: "Completed",
 };
 
+const ACTIVE_JOB_STATUSES = new Set(["PENDING_ACCEPTANCE", "CONFIRMED", "ARRIVED"]);
+
 export function WorkerJobsList() {
   const [jobs, setJobs] = useState<JobBooking[] | null>(null);
+  const [dismissedIds, setDismissedIds] = useState<string[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("worker_dismissed_jobs");
+      if (stored) setDismissedIds(JSON.parse(stored));
+    } catch {
+      /* ignore storage errors */
+    }
+  }, []);
+
+  const dismissJob = (id: string) => {
+    setDismissedIds((prev) => {
+      const updated = [...prev, id];
+      try {
+        localStorage.setItem("worker_dismissed_jobs", JSON.stringify(updated));
+      } catch {
+        /* ignore storage errors */
+      }
+      return updated;
+    });
+  };
+
+  const clearAllCompleted = () => {
+    if (!jobs) return;
+    const completedIds = jobs
+      .filter((j) => !ACTIVE_JOB_STATUSES.has(j.status))
+      .map((j) => j.id);
+    setDismissedIds((prev) => {
+      const updated = Array.from(new Set([...prev, ...completedIds]));
+      try {
+        localStorage.setItem("worker_dismissed_jobs", JSON.stringify(updated));
+      } catch {
+        /* ignore storage errors */
+      }
+      return updated;
+    });
+  };
 
   const refetch = useCallback(() => {
     return fetch("/api/bookings/mine")
@@ -42,11 +83,24 @@ export function WorkerJobsList() {
 
   useEffect(() => {
     refetch();
+    const handleFocus = () => refetch();
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleFocus);
+    const interval = setInterval(refetch, 3000);
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleFocus);
+      clearInterval(interval);
+    };
   }, [refetch]);
 
   if (jobs === null) {
     return <div className="h-32 animate-pulse rounded-2xl bg-zinc-100 dark:bg-zinc-900" />;
   }
+
+  const visibleJobs = jobs.filter((j) => !dismissedIds.includes(j.id));
+  const activeJobs = visibleJobs.filter((j) => ACTIVE_JOB_STATUSES.has(j.status));
+  const pastJobs = visibleJobs.filter((j) => !ACTIVE_JOB_STATUSES.has(j.status));
 
   if (jobs.length === 0) {
     return (
@@ -59,15 +113,65 @@ export function WorkerJobsList() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      {jobs.map((job) => (
-        <JobCard key={job.id} job={job} onChange={refetch} />
-      ))}
+    <div className="flex flex-col gap-6">
+      {/* Active Jobs */}
+      <div className="flex flex-col gap-4">
+        {activeJobs.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-zinc-300 p-6 text-center dark:border-zinc-800">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              No active booking requests right now.
+            </p>
+          </div>
+        ) : (
+          activeJobs.map((job) => (
+            <JobCard key={job.id} job={job} onChange={refetch} onDismiss={dismissJob} />
+          ))
+        )}
+      </div>
+
+      {/* Completed / Past Jobs History */}
+      {pastJobs.length > 0 && (
+        <div className="flex flex-col gap-3 rounded-2xl border border-zinc-200/80 bg-zinc-50/50 p-5 dark:border-zinc-800 dark:bg-zinc-900/40">
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => setShowHistory(!showHistory)}
+              className="flex items-center gap-2 text-sm font-semibold text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100"
+            >
+              <span>{showHistory ? "▼" : "▶"}</span>
+              <span>Completed & Past History ({pastJobs.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={clearAllCompleted}
+              className="text-xs font-medium text-red-600 hover:underline dark:text-red-400"
+            >
+              Clear Completed History
+            </button>
+          </div>
+
+          {showHistory && (
+            <div className="mt-2 flex flex-col gap-3">
+              {pastJobs.map((job) => (
+                <JobCard key={job.id} job={job} onChange={refetch} onDismiss={dismissJob} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-function JobCard({ job, onChange }: { job: JobBooking; onChange: () => void }) {
+function JobCard({
+  job,
+  onChange,
+  onDismiss,
+}: {
+  job: JobBooking;
+  onChange: () => void;
+  onDismiss?: (id: string) => void;
+}) {
   const [counterRate, setCounterRate] = useState("");
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -123,9 +227,21 @@ function JobCard({ job, onChange }: { job: JobBooking; onChange: () => void }) {
             {new Date(job.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
           </p>
         </div>
-        <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700 dark:bg-brand-950 dark:text-brand-300">
-          {STATUS_LABEL[job.status] ?? job.status}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700 dark:bg-brand-950 dark:text-brand-300">
+            {STATUS_LABEL[job.status] ?? job.status}
+          </span>
+          {!ACTIVE_JOB_STATUSES.has(job.status) && onDismiss && (
+            <button
+              type="button"
+              onClick={() => onDismiss(job.id)}
+              className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+              title="Remove from list"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
 
       {error && <p className={`mt-3 ${errorBannerClasses}`}>{error}</p>}

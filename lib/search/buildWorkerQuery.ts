@@ -29,7 +29,8 @@ export function buildWorkerWhere(filters: WorkerSearchFilters): Prisma.WorkerWhe
   }
 
   if (filters.area) {
-    where.area = filters.area;
+    const formattedArea = filters.area.trim().toUpperCase() as DhakaArea;
+    where.area = formattedArea;
   }
 
   if (filters.availableNow) {

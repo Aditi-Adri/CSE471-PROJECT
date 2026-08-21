@@ -55,8 +55,8 @@ export async function GET(request: Request) {
       availableNow: searchParams.get("availableNow") === "true" ? true : undefined,
     },
     sort: searchParams.get("sort") || undefined,
-    page: parseIntParam(searchParams.get("page")),
-    pageSize: parseIntParam(searchParams.get("pageSize")),
+    page: parseIntParam(searchParams.get("page")) ?? 1,
+    pageSize: parseIntParam(searchParams.get("pageSize")) ?? 10,
   });
 
   if (!parsed.success) {
@@ -123,7 +123,7 @@ export async function GET(request: Request) {
     minTier: filters.minTier as VerificationTier | undefined,
     availableNow: filters.availableNow,
   });
-  const orderBy = buildWorkerOrderBy(sort);
+  const orderBy = buildWorkerOrderBy((sort as any) ?? "RELEVANCE");
 
   const [total, workers] = await Promise.all([
     prisma.worker.count({ where }),

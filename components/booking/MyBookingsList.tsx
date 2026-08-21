@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { formatCurrency } from "@/lib/booking/bookingFlow";
 import { cardClasses } from "@/lib/ui/formStyles";
 
@@ -42,11 +42,24 @@ const STATUS_LABEL: Record<string, string> = {
 export function MyBookingsList() {
   const [bookings, setBookings] = useState<MyBooking[] | null>(null);
 
-  useEffect(() => {
-    fetch("/api/bookings/mine")
+  const refetch = useCallback(() => {
+    return fetch("/api/bookings/mine")
       .then((res) => res.json())
       .then((data) => setBookings(data.bookings ?? []));
   }, []);
+
+  useEffect(() => {
+    refetch();
+    const handleFocus = () => refetch();
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleFocus);
+    const interval = setInterval(refetch, 3000);
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleFocus);
+      clearInterval(interval);
+    };
+  }, [refetch]);
 
   if (bookings === null) {
     return <div className="h-32 animate-pulse rounded-2xl bg-zinc-100 dark:bg-zinc-900" />;
