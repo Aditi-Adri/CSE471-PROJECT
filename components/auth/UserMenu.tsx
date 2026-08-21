@@ -132,6 +132,13 @@ export function UserMenu() {
               >
                 Workshops
               </Link>
+              <Link
+                href="/dashboard/complaints"
+                onClick={() => setOpen(false)}
+                className="block px-4 py-2 text-sm text-zinc-700 transition hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                My complaints
+              </Link>
             </>
           )}
           {session.user.role === "ADMIN" && (
@@ -149,6 +156,13 @@ export function UserMenu() {
                 className="block px-4 py-2 text-sm text-zinc-700 transition hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
               >
                 Workshops
+              </Link>
+              <Link
+                href="/admin/complaints"
+                onClick={() => setOpen(false)}
+                className="block px-4 py-2 text-sm text-zinc-700 transition hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                Complaints
               </Link>
             </>
           )}

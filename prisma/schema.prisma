@@ -37,6 +37,10 @@ model User {
   /// before — see docs/FEATURE_SPEC.md's booking-flow section.
   address               String?
   accounts              Account[]
+  /// Complaints this user filed as a customer - see Complaint below.
+  complaintsFiled       Complaint[]            @relation("ComplaintsFiled")
+  /// Complaints this admin resolved - see Complaint below.
+  complaintsResolved    Complaint[]            @relation("ComplaintsResolved")
   /// Workers this customer has starred - see Favorite below.
   favorites             Favorite[]
   /// Requests this user posted when a search came up with no matching
@@ -198,6 +202,8 @@ model Worker {
   jobRequestApplications JobRequestApplication[]
   partOrders             PartOrder[]
   favoritedBy            Favorite[]
+  /// Complaints filed against this worker - see Complaint above.
+  complaints             Complaint[]
   tier1Verification      Tier1Verification?
   tier2SkillTest         Tier2SkillTest?
   tier3PoliceClearance   Tier3PoliceClearance?
@@ -571,6 +577,42 @@ model WorkshopRegistration {
 
   @@unique([workshopId, userId])
   @@index([workshopId])
+}
+
+// =====================================================================
+// MODULE 2 (Adri): a customer can file a complaint against a worker,
+// an admin resolves it and can optionally reply. Not one of the PDF's
+// numbered features. Deliberately simple and NOT tied to a booking or
+// payment - keeps this separate from Jishan's still-unbuilt Module 2
+// F3 (dispute resolution + escrow settlement), which is specifically
+// about a completed, paid booking. This is closer to "report this
+// worker" than a financial dispute.
+// =====================================================================
+
+model Complaint {
+  id           String          @id @default(cuid())
+  customerId   String
+  customer     User            @relation("ComplaintsFiled", fields: [customerId], references: [id], onDelete: Cascade)
+  workerId     String
+  worker       Worker          @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  subject      String
+  description  String
+  status       ComplaintStatus @default(PENDING)
+  /// Set only once an admin resolves this complaint - see resolvedById/resolvedAt.
+  adminReply   String?
+  resolvedById String?
+  resolvedBy   User?           @relation("ComplaintsResolved", fields: [resolvedById], references: [id], onDelete: SetNull)
+  resolvedAt   DateTime?
+  createdAt    DateTime        @default(now())
+
+  @@index([customerId])
+  @@index([workerId])
+  @@index([status])
+}
+
+enum ComplaintStatus {
+  PENDING
+  RESOLVED
 }
 
 // =====================================================================

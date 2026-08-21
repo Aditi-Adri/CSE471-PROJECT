@@ -1,6 +1,7 @@
 import Link from "next/link";
 import {
   ClipboardCheckIcon,
+  FlagIcon,
   GraduationCapIcon,
   IdCardIcon,
   MapPinIcon,
@@ -68,6 +69,12 @@ function getQuickLinks(role: Role, hasWorkerProfile: boolean): QuickLink[] {
           description: "Free and paid workshops and training programmes you can register for.",
           icon: GraduationCapIcon,
         },
+        {
+          href: "/dashboard/complaints",
+          title: "My complaints",
+          description: "Complaints you've filed against workers, and any admin reply.",
+          icon: FlagIcon,
+        },
       ];
 
     case "WORKER":
@@ -133,6 +140,12 @@ function getQuickLinks(role: Role, hasWorkerProfile: boolean): QuickLink[] {
           title: "Workshops",
           description: "Create a free or paid workshop and see who has registered.",
           icon: GraduationCapIcon,
+        },
+        {
+          href: "/admin/complaints",
+          title: "Complaints",
+          description: "What customers have reported about workers — resolve each one.",
+          icon: FlagIcon,
         },
       ];
   }

@@ -137,6 +137,17 @@ below have no matching models yet. `Review` now exists (Feature 1).
 | 3 | Jishan | Dispute resolution + escrow settlement (needs a payment gateway). Now has something real to attach to — `Booking.status` reaches `COMPLETED` for real | 🔴 Not built | — |
 | 4 | Sudiptha | Worker income intelligence dashboard + AI predictive planner (Groq). Now has real `agreedRateBdt`/`COMPLETED` bookings to aggregate | 🔴 Not built | — |
 
+**Adri's own addition, not one of the PDF's numbered features above**: customer complaints
+against a worker, resolved by an admin (optionally with a reply). Deliberately simple and
+**not** tied to a booking or payment — kept separate from Jishan's Module 2 F3 above (dispute
+resolution + escrow settlement) so the two won't collide when he builds it; this is closer to
+"report this worker" than a financial dispute. ✅ Built. Models `Complaint`/`ComplaintStatus`.
+`POST /api/complaints` (customer-only, filed from a worker's profile page —
+`components/complaints/FileComplaintForm.tsx` on `app/workers/[id]/page.tsx`),
+`GET /api/complaints/mine` (the customer's own, `app/dashboard/complaints`),
+`GET`/`POST /api/admin/complaints` (admin-only list + resolve-with-optional-reply,
+`app/admin/complaints`).
+
 ## Module 3: Marketplace Monetization, Communication & Automated Ops — 🟡 partially started
 
 PDF lists 2 features per member here (numbering in the source PDF repeats 1–4 twice —

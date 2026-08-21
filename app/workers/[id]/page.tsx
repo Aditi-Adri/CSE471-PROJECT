@@ -13,6 +13,7 @@ import { TrustScoreBadge } from "@/components/trust/TrustScoreBadge";
 import { TrustScoreDetails } from "@/components/trust/TrustScoreDetails";
 import { ReviewList } from "@/components/reviews/ReviewList";
 import { FavoriteButton } from "@/components/favorites/FavoriteButton";
+import { FileComplaintForm } from "@/components/complaints/FileComplaintForm";
 import { getTrustBreakdown } from "@/lib/trust/recomputeTrustScore";
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -174,6 +175,8 @@ export default async function WorkerProfilePage({
           Direct booking, in-app chat and secure payment are launching soon — for now, use this
           profile to compare verified technicians before reaching out.
         </p>
+
+        {isCustomer && <FileComplaintForm workerId={worker.id} />}
       </div>
 
       {trustBreakdown && <TrustScoreDetails breakdown={trustBreakdown} />}

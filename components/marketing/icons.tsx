@@ -138,6 +138,21 @@ export function RadarIcon({ className = base }: IconProps) {
   );
 }
 
+export function FlagIcon({ className = base }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path d="M6 3v18" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+      <path
+        d="M6 4h12l-3 4 3 4H6"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function GraduationCapIcon({ className = base }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
