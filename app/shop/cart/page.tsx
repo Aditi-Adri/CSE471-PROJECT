@@ -42,10 +42,61 @@ function CartPageContent() {
 
   const [error, setError] = useState("");
   const [confirming, setConfirming] = useState(false);
-  const [placedOrder, setPlacedOrder] = useState<{ id: number; total: number } | null>(null);
+  const [placedOrder, setPlacedOrder] = useState<{ id: number; total: number; discountBdt: number } | null>(
+    null
+  );
   const [paymentReturn] = useState<PaymentReturnState>(
     () => searchParams.get("payment") as PaymentReturnState
   );
+
+  // MODULE 4 (Shiva): coupon applied at checkout — see
+  // app/api/coupons/validate and app/api/shop/orders (which
+  // re-validates this from scratch; nothing here is trusted as-is).
+  // `validatedTotalBdt` is what the discount was actually computed
+  // against, so editing the cart afterwards can be flagged as stale
+  // instead of silently showing a now-wrong number.
+  const [couponInput, setCouponInput] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    code: string;
+    discountBdt: number;
+    validatedTotalBdt: number;
+  } | null>(null);
+  const [couponError, setCouponError] = useState("");
+  const [checkingCoupon, setCheckingCoupon] = useState(false);
+
+  async function handleApplyCoupon() {
+    if (!couponInput.trim()) return;
+    setCheckingCoupon(true);
+    setCouponError("");
+    try {
+      const res = await fetch("/api/coupons/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: couponInput.trim(), orderTotalBdt: totalBill }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.valid) {
+        setAppliedCoupon(null);
+        setCouponError(data.message || data.error || "That coupon isn't valid.");
+        return;
+      }
+      setAppliedCoupon({ code: data.code, discountBdt: data.discountBdt, validatedTotalBdt: totalBill });
+    } catch {
+      setCouponError("Couldn't check that coupon — try again.");
+    } finally {
+      setCheckingCoupon(false);
+    }
+  }
+
+  function handleRemoveCoupon() {
+    setAppliedCoupon(null);
+    setCouponInput("");
+    setCouponError("");
+  }
+
+  const couponStale = appliedCoupon != null && appliedCoupon.validatedTotalBdt !== totalBill;
+  const discountBdt = appliedCoupon && !couponStale ? appliedCoupon.discountBdt : 0;
+  const finalTotal = Math.max(0, totalBill - discountBdt);
 
   // FEATURE: Any signed-in account can check out
   useEffect(() => {
@@ -72,6 +123,17 @@ function CartPageContent() {
       return;
     }
 
+    // The cart changed since the applied coupon's discount was last
+    // computed — refuse to charge against a total the screen isn't
+    // actually showing. (The server would recompute the real discount
+    // correctly either way, but silently charging something other
+    // than the number the customer just looked at is exactly what the
+    // "stale" flag exists to prevent.)
+    if (couponStale) {
+      setError("Your cart changed since the coupon was applied — recalculate it before confirming.");
+      return;
+    }
+
     try {
       setConfirming(true);
       setError("");
@@ -81,18 +143,25 @@ function CartPageContent() {
         body: JSON.stringify({
           workerId: session?.user?.id,
           items: lines.map((l) => ({ itemId: l.itemId, quantity: l.quantity })),
+          couponCode: appliedCoupon?.code,
         }),
       });
       const data = await res.json();
 
       if (!res.ok) {
-        // Stock changed under us — show the API's message and re-sync caps
+        // Stock changed under us, or the coupon stopped being valid
+        // between the preview and now — show the API's message and
+        // re-sync caps either way.
         setError(data.error || "Failed to confirm the order.");
+        if (data.couponReason) {
+          setAppliedCoupon(null);
+        }
         await refreshStock();
         return;
       }
 
       clearCart();
+      handleRemoveCoupon();
 
       // MODULE 3 (Shiva): a real payment session was opened — send the
       // browser to SSLCommerz's hosted checkout page. The order is
@@ -105,7 +174,7 @@ function CartPageContent() {
 
       // No gateway configured (SSLCOMMERZ_STORE_ID/PASSWORD unset) —
       // same as before this existed, the order is just marked paid.
-      setPlacedOrder({ id: data.orderId, total: Number(data.totalAmount) });
+      setPlacedOrder({ id: data.orderId, total: Number(data.totalAmount), discountBdt: data.discountBdt ?? 0 });
     } catch (err) {
       console.error(err);
       setError("Something went wrong while confirming the order.");
@@ -185,6 +254,7 @@ function CartPageContent() {
             </p>
             <p className="mt-1 text-sm text-green-700 dark:text-green-400">
               Order #{placedOrder.id} · {formatBdt(placedOrder.total)}
+              {placedOrder.discountBdt > 0 && ` (saved ${formatBdt(placedOrder.discountBdt)} with your coupon)`}
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
               <Link
@@ -298,20 +368,87 @@ function CartPageContent() {
                 ))}
               </dl>
 
-              <div className="mt-5 flex items-baseline justify-between border-t border-zinc-200 pt-4 dark:border-zinc-800">
+              {/* MODULE 4 (Shiva): coupon code entry */}
+              <div className="mt-5 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+                {appliedCoupon ? (
+                  <div
+                    className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm ${couponStale ? "bg-amber-50 dark:bg-amber-950/40" : "bg-green-50 dark:bg-green-950/40"}`}
+                  >
+                    <span
+                      className={`font-medium ${couponStale ? "text-amber-800 dark:text-amber-300" : "text-green-800 dark:text-green-300"}`}
+                    >
+                      {couponStale
+                        ? `Cart changed — recalculate ${appliedCoupon.code}`
+                        : `Coupon ${appliedCoupon.code} applied`}
+                    </span>
+                    <span className="flex shrink-0 gap-3">
+                      {couponStale && (
+                        <button
+                          type="button"
+                          onClick={handleApplyCoupon}
+                          disabled={checkingCoupon}
+                          className="text-xs font-medium text-amber-700 hover:underline dark:text-amber-400"
+                        >
+                          {checkingCoupon ? "Checking…" : "Recalculate"}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleRemoveCoupon}
+                        className="text-xs font-medium text-zinc-600 hover:underline dark:text-zinc-400"
+                      >
+                        Remove
+                      </button>
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      value={couponInput}
+                      onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                      placeholder="Coupon code"
+                      className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleApplyCoupon}
+                      disabled={checkingCoupon || !couponInput.trim()}
+                      className="shrink-0 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:text-zinc-400 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                    >
+                      {checkingCoupon ? "Checking…" : "Apply"}
+                    </button>
+                  </div>
+                )}
+                {couponError && <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{couponError}</p>}
+              </div>
+
+              <div className="mt-4 space-y-1.5 text-sm">
+                <div className="flex justify-between text-zinc-600 dark:text-zinc-400">
+                  <span>Subtotal</span>
+                  <span>{formatBdt(totalBill)}</span>
+                </div>
+                {discountBdt > 0 && (
+                  <div className="flex justify-between text-green-700 dark:text-green-400">
+                    <span>Discount</span>
+                    <span>−{formatBdt(discountBdt)}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-3 flex items-baseline justify-between border-t border-zinc-200 pt-4 dark:border-zinc-800">
                 <span className="font-semibold text-zinc-900 dark:text-zinc-100">Total</span>
                 <span className="text-2xl font-bold text-brand-600 dark:text-brand-400">
-                  {formatBdt(totalBill)}
+                  {formatBdt(finalTotal)}
                 </span>
               </div>
 
               <button
                 type="button"
                 onClick={handleConfirmPayment}
-                disabled={confirming || lines.length === 0}
+                disabled={confirming || lines.length === 0 || couponStale}
                 className="mt-5 w-full rounded-lg bg-brand-600 px-4 py-3 text-sm font-semibold text-white shadow-sm shadow-brand-600/20 transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-500 dark:disabled:bg-zinc-800 dark:disabled:text-zinc-500"
               >
-                {confirming ? "Confirming…" : "Confirm payment"}
+                {confirming ? "Confirming…" : couponStale ? "Recalculate coupon to continue" : "Confirm payment"}
               </button>
 
               <button

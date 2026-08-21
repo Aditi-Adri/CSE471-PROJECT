@@ -174,3 +174,18 @@ export function GraduationCapIcon({ className = base }: IconProps) {
     </svg>
   );
 }
+
+// MODULE 4 (Shiva): referral codes + coupon system.
+export function TagIcon({ className = base }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path
+        d="M11.5 4h-5A2.5 2.5 0 0 0 4 6.5v5c0 .53.21 1.04.59 1.41l7.5 7.5a2 2 0 0 0 2.82 0l5-5a2 2 0 0 0 0-2.82l-7.5-7.5A2 2 0 0 0 11.5 4Z"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinejoin="round"
+      />
+      <circle cx="8.5" cy="8.5" r="1.4" fill="currentColor" />
+    </svg>
+  );
+}

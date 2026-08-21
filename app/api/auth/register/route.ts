@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth/passwords";
 import { checkRateLimit, getClientIp } from "@/lib/auth/rateLimit";
 import { registerSchema } from "@/lib/validation/authSchemas";
+import { issueReferralReward } from "@/lib/referrals/issueReferralReward";
+import { withErrorHandling } from "@/lib/api/withErrorHandling";
 
 /**
  * POST /api/auth/register
@@ -12,7 +14,7 @@ import { registerSchema } from "@/lib/validation/authSchemas";
  * so cookie issuance always goes through NextAuth's own flow rather
  * than a hand-rolled one here.
  */
-export async function POST(request: Request) {
+export const POST = withErrorHandling(async (request: Request) => {
   const ip = getClientIp(request);
   const rateLimit = checkRateLimit(`register:${ip}`, 10, 10 * 60 * 1000);
   if (!rateLimit.allowed) {
@@ -31,7 +33,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { name, email, phone, password, role } = parsed.data;
+  const { name, email, phone, password, role, referralCode } = parsed.data;
   const normalizedPhone = phone ? phone : null;
 
   const existingEmail = await prisma.user.findUnique({ where: { email } });
@@ -52,12 +54,36 @@ export async function POST(request: Request) {
     }
   }
 
+  // MODULE 4 (Shiva): an unknown/mistyped referral code doesn't block
+  // sign-up — it just means no referral reward gets issued. Looked up
+  // before creating the account so a typo can't ever end up "referred
+  // by yourself".
+  const referrer = referralCode
+    ? await prisma.user.findUnique({ where: { referralCode }, select: { id: true } })
+    : null;
+
   const passwordHash = await hashPassword(password);
 
   const user = await prisma.user.create({
-    data: { name, email, phone: normalizedPhone, passwordHash, role },
+    data: { name, email, phone: normalizedPhone, passwordHash, role, referredById: referrer?.id ?? null },
     select: { id: true, name: true, email: true, role: true },
   });
 
-  return Response.json({ user }, { status: 201 });
-}
+  // The account is already created at this point — a failure issuing
+  // the reward (e.g. generateCouponCode exhausting its retry budget)
+  // shouldn't turn an otherwise-successful registration into a 500 the
+  // client can't recover from (retrying would then hit "email already
+  // in use"). Worst case, the new user just doesn't get their reward
+  // and can be issued one manually later.
+  let referralApplied = false;
+  if (referrer) {
+    try {
+      await issueReferralReward(referrer.id, user.id);
+      referralApplied = true;
+    } catch (err) {
+      console.error(`Failed to issue referral reward for new user ${user.id}:`, err);
+    }
+  }
+
+  return Response.json({ user, referralApplied }, { status: 201 });
+});

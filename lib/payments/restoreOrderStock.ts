@@ -20,6 +20,11 @@ export async function restoreOrderStock(tranId: string, status: "FAILED" | "CANC
     ...order.items.map((item) =>
       prisma.item.update({ where: { id: item.itemId }, data: { stockQty: { increment: item.quantity } } })
     ),
+    // MODULE 4 (Shiva): a coupon applied to this order never actually
+    // paid off — deleting the redemption frees it up again instead of
+    // permanently burning a (often single-use, e.g. a referral reward)
+    // coupon on a payment that never went through.
+    prisma.couponRedemption.deleteMany({ where: { orderId: order.id } }),
     prisma.order.update({ where: { id: order.id }, data: { paymentStatus: status } }),
   ]);
 }

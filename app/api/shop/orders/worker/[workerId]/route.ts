@@ -47,6 +47,9 @@ export async function GET(
             subtotal: true,
           },
         },
+        // MODULE 4 (Shiva): so history can show "coupon SAVE10 applied"
+        // rather than just a bare discount number.
+        couponRedemption: { include: { coupon: { select: { code: true } } } },
       },
       orderBy: {
         createdAt: "desc",
@@ -60,6 +63,8 @@ export async function GET(
         id: order.id,
         date: order.createdAt,
         totalAmount: order.totalAmount,
+        discountBdt: order.discountBdt,
+        couponCode: order.couponRedemption?.coupon.code ?? null,
         itemsCount: order.items.length,
         items: order.items,
         jobId: order.jobId,

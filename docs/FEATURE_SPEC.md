@@ -165,15 +165,16 @@ this is that second pass).
 | Sudiptha | Automated escrow expiry + wallet payout pipeline — hourly `node-cron` job, 48h no-dispute auto-release minus commission. Needs `node-cron` added to `package.json`. Now has a real `ARRIVED`→`COMPLETED` transition to hang the timeout off of | 🔴 Not built | — |
 | Sudiptha | Dynamic multi-tier subscription plan selector (Silver/Gold radius tiers) driven by a `SubscriptionTiers` table | 🔴 Not built | — |
 
-## Module 4 — not in the PDF; Adri's own addition
+## Module 4 — not in the PDF; own additions
 
-Not one of the PDF's numbered features — a small, self-contained extra rather than
+Not one of the PDF's numbered features — small, self-contained extras rather than
 something assigned. Simple by design, not meant to carry the same weight as the
 Module 1/2/3 rows above.
 
 | Owner | Feature | Status | Files |
 |---|---|---|---|
 | Adri | Favorite workers — customer stars a worker to rebook later without searching again | ✅ Built | Model `Favorite` (`customerId`, `workerId`, unique together). `POST /api/favorites/[workerId]` toggles star on/off, `GET /api/favorites` lists them. `components/favorites/FavoriteButton.tsx` on `app/workers/[id]/page.tsx` (customers only), `components/favorites/FavoritesList.tsx` on `/dashboard/favorites` |
+| Shiva | Referral codes + coupon system — any account can share its own referral code; signing up with one rewards both sides with a coupon. Admin creates/manages coupons independently. Applies at the one real money-moving checkout today, the Spare Parts Shop (`app/api/shop/orders`) | ✅ Built | Models `Coupon` (admin- or referral-issued; public or private via `issuedToUserId`), `CouponRedemption`; `User.referralCode`/`referredById`; `Order.discountBdt`. Pure logic: `lib/coupons/couponMath.ts` (discount amount), `lib/coupons/couponEligibility.ts` (usable-right-now check) — both unit-tested, same split as `trustScoreMath`/`demandScoreMath`. `lib/referrals/issueReferralReward.ts` issues the matching pair of coupons (10% off, capped ৳200, min order ৳300, 90-day expiry — `lib/referrals/referralConfig.ts`). Referral code entry is on the credentials `POST /api/auth/register` form only, not Google SSO. `POST /api/coupons/validate` (live checkout preview), `GET /api/coupons/mine`, `GET /api/referrals/me`, `GET/POST /api/admin/coupons`, `PATCH /api/admin/coupons/[id]`. UI: `components/coupons/ReferralCard.tsx` on `/account`, `components/coupons/MyCouponsList.tsx` on `/dashboard/coupons`, coupon field on `app/shop/cart`, `components/admin/CouponManager.tsx` on `/admin/coupons` |
 
 ## How to use this doc when asked to "build module X feature Y"
 

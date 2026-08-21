@@ -9,6 +9,7 @@ import {
   ShieldCheckIcon,
   SirenIcon,
   StarIcon,
+  TagIcon,
   WrenchIcon,
 } from "@/components/marketing/icons";
 import type { Role } from "@/app/generated/prisma/client";
@@ -75,6 +76,12 @@ function getQuickLinks(role: Role, hasWorkerProfile: boolean): QuickLink[] {
           description: "Complaints you've filed against workers, and any admin reply.",
           icon: FlagIcon,
         },
+        {
+          href: "/dashboard/coupons",
+          title: "My coupons",
+          description: "Codes you can apply at checkout in the spare parts shop.",
+          icon: TagIcon,
+        },
       ];
 
     case "WORKER":
@@ -119,6 +126,12 @@ function getQuickLinks(role: Role, hasWorkerProfile: boolean): QuickLink[] {
           description: "Free and paid workshops and training programmes you can register for.",
           icon: GraduationCapIcon,
         },
+        {
+          href: "/dashboard/coupons",
+          title: "My coupons",
+          description: "Codes you can apply at checkout in the spare parts shop.",
+          icon: TagIcon,
+        },
       ];
 
     case "ADMIN":
@@ -146,6 +159,12 @@ function getQuickLinks(role: Role, hasWorkerProfile: boolean): QuickLink[] {
           title: "Complaints",
           description: "What customers have reported about workers — resolve each one.",
           icon: FlagIcon,
+        },
+        {
+          href: "/admin/coupons",
+          title: "Coupon management",
+          description: "Create and deactivate discount codes for the spare parts shop.",
+          icon: TagIcon,
         },
       ];
   }

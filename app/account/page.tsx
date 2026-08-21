@@ -10,6 +10,8 @@ import { ProfileSettingsForm } from "@/components/dashboard/ProfileSettingsForm"
 import { PasswordSettingsForm } from "@/components/dashboard/PasswordSettingsForm";
 // MODULE 3 (Sudiptha): Spare Parts Shop order history.
 import { OrderHistory } from "@/components/dashboard/OrderHistory";
+// MODULE 4 (Shiva): referral codes + coupons.
+import { ReferralCard } from "@/components/coupons/ReferralCard";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -83,6 +85,7 @@ export default async function AccountPage() {
             memberSince={user.createdAt}
             verificationTier={user.worker?.verificationTier}
           />
+          <ReferralCard />
           <PasswordSettingsForm hasPassword={Boolean(user.passwordHash)} />
         </div>
       </div>
