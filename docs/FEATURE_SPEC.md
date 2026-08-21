@@ -137,6 +137,17 @@ below have no matching models yet. `Review` now exists (Feature 1).
 | 3 | Jishan | Dispute resolution + escrow settlement (needs a payment gateway). Now has something real to attach to — `Booking.status` reaches `COMPLETED` for real | 🔴 Not built | — |
 | 4 | Sudiptha | Worker income intelligence dashboard + AI predictive planner (Groq). Now has real `agreedRateBdt`/`COMPLETED` bookings to aggregate | 🔴 Not built | — |
 
+**Adri's own addition, not one of the PDF's numbered features above**: customer complaints
+against a worker, resolved by an admin (optionally with a reply). Deliberately simple and
+**not** tied to a booking or payment — kept separate from Jishan's Module 2 F3 above (dispute
+resolution + escrow settlement) so the two won't collide when he builds it; this is closer to
+"report this worker" than a financial dispute. ✅ Built. Models `Complaint`/`ComplaintStatus`.
+`POST /api/complaints` (customer-only, filed from a worker's profile page —
+`components/complaints/FileComplaintForm.tsx` on `app/workers/[id]/page.tsx`),
+`GET /api/complaints/mine` (the customer's own, `app/dashboard/complaints`),
+`GET`/`POST /api/admin/complaints` (admin-only list + resolve-with-optional-reply,
+`app/admin/complaints`).
+
 ## Module 3: Marketplace Monetization, Communication & Automated Ops — 🟡 partially started
 
 PDF lists 2 features per member here (numbering in the source PDF repeats 1–4 twice —
@@ -148,6 +159,7 @@ this is that second pass).
 | Shiva | Real-time job chat + notifications via Socket.IO. `server.ts` already runs a Socket.IO server for tracking — extend it, don't start a second one | 🔴 Not built | — |
 | Adri | Spare parts e-commerce shop + inventory margin manager (catalog, markup, escrow-bill append, stock decrement) | 🟡 Partial — built the escrow-bill-append half on top of the existing Job Requests flow (not Sudiptha's shop/Item/Order — separate models, see below); markup/margin isn't in yet, `Part.price` is a single sell price | `JobRequestApplication.wageBdt` (worker states a price when applying, customer picks based on it), models `Part`/`PartOrder`/`PartOrderItem` (own catalog + order, tied to a real `JobRequest` via a real foreign key — not free text like `Order.jobId`). `POST /api/job-requests/[id]/apply` (now needs a wage), `GET /api/parts`, `POST /api/job-requests/[id]/parts` (hired worker buys parts, stock decrements in a transaction, only the actual hired worker can buy on that job). `mine`/`my-applications` both return `wageBdt` + `partsTotalBdt` + `totalBillBdt` — the combined bill the customer pays. `components/jobRequests/BuyPartsForm.tsx`. Seed: `prisma/seedParts.ts` |
 | Adri | Admin verification lifecycle queue + ban enforcement — **extends** `app/admin/verifications`; read that first, don't duplicate | 🔴 Not built | — |
+| Adri | Workshops & training programs — not one of the PDF's numbered features, a self-added extra. Admin creates a workshop or training programme, free or paid; any worker or customer can register. No real payment gateway — same simple approach as Parts Billing, registering just records the fee that was agreed | ✅ Built | Models `Workshop`/`WorkshopRegistration` (unique per workshop+user). `GET /api/workshops` (list, upcoming first, shows registrant count + whether the viewer already registered), `POST /api/workshops` (admin-only create), `POST /api/workshops/[id]/register` (any signed-in non-admin). Admin: `app/admin/workshops`, `components/workshops/AdminWorkshopsDashboard.tsx`. Worker/customer: `app/dashboard/workshops`, `components/workshops/WorkshopsList.tsx` |
 | Jishan | Platform financial analytics + commission ledger dashboard (job commissions + subscriptions + parts margin, by district) | 🔴 Not built | — |
 | Jishan | Corporate multi-property subscription portal (B2B, recurring checks, caretaker permissions, aggregated billing) | 🔴 Not built | — |
 | Sudiptha | Automated escrow expiry + wallet payout pipeline — hourly `node-cron` job, 48h no-dispute auto-release minus commission. Needs `node-cron` added to `package.json`. Now has a real `ARRIVED`→`COMPLETED` transition to hang the timeout off of | 🔴 Not built | — |

@@ -17,62 +17,70 @@ datasource db {
 /// PasswordResetToken table for the forgot-password flow.
 /// =====================================================================
 model User {
-  id                  String                 @id @default(cuid())
-  name                String
-  email               String                 @unique
-  emailVerified       DateTime?
-  image               String?
-  phone               String?                @unique
-  passwordHash        String?
-  role                Role                   @default(CUSTOMER)
+  id                    String                 @id @default(cuid())
+  name                  String
+  email                 String                 @unique
+  emailVerified         DateTime?
+  image                 String?
+  phone                 String?                @unique
+  passwordHash          String?
+  role                  Role                   @default(CUSTOMER)
   /// Account-lockout rate limiting for the credentials login flow (see
   /// lib/auth/authOptions.ts). Reset on a successful login.
-  failedLoginAttempts Int                    @default(0)
-  lockedUntil         DateTime?
-  createdAt           DateTime               @default(now())
-  updatedAt           DateTime               @updatedAt
+  failedLoginAttempts   Int                    @default(0)
+  lockedUntil           DateTime?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
   /// Customer's saved home/service address — set from the dashboard
   /// (see app/api/account/profile). Surfaced to the assigned worker
   /// only after a booking is confirmed (arrival-code match), never
   /// before — see docs/FEATURE_SPEC.md's booking-flow section.
-  address             String?
+  address               String?
+  accounts              Account[]
+  /// Complaints this user filed as a customer - see Complaint below.
+  complaintsFiled       Complaint[]            @relation("ComplaintsFiled")
+  /// Complaints this admin resolved - see Complaint below.
+  complaintsResolved    Complaint[]            @relation("ComplaintsResolved")
   /// MODULE 4 (Shiva): this user's own code to share — see Coupon
   /// below. Generated lazily on first view (lib/referrals/referralCode.ts),
   /// not at signup, so every account gets one without touching every
   /// place a User row can be created (credentials register + Google
   /// SSO via the NextAuth adapter).
-  referralCode        String?                @unique
+  referralCode          String?                @unique
   /// Who this user signed up with the referral code of, if anyone —
   /// set once, at registration, from lib/validation/authSchemas.ts'
   /// optional `referralCode` field. Self-relation, not a separate
   /// join table: a user is referred by at most one other user, ever.
-  referredById        String?
-  referredBy          User?                  @relation("UserReferrals", fields: [referredById], references: [id], onDelete: SetNull)
-  referrals           User[]                 @relation("UserReferrals")
-  accounts            Account[]
+  referredById          String?
+  referredBy            User?                  @relation("UserReferrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals             User[]                 @relation("UserReferrals")
   /// Coupons an admin created — see Coupon below.
-  createdCoupons      Coupon[]               @relation("CouponCreatedBy")
+  createdCoupons        Coupon[]               @relation("CouponCreatedBy")
   /// Private coupons issued straight to this user (e.g. a referral
   /// reward) — see Coupon.issuedToUserId below.
-  issuedCoupons       Coupon[]               @relation("CouponIssuedTo")
-  couponRedemptions   CouponRedemption[]
+  issuedCoupons         Coupon[]               @relation("CouponIssuedTo")
+  couponRedemptions     CouponRedemption[]
   /// Workers this customer has starred - see Favorite below.
-  favorites           Favorite[]
+  favorites             Favorite[]
   /// Requests this user posted when a search came up with no matching
   /// category — see JobRequest below.
-  jobRequests         JobRequest[]
+  jobRequests           JobRequest[]
   /// Spare-parts orders this worker placed — see Order below. Named
   /// `orders`, not `workerOrders`: only workers buy from the shop
   /// today, but the field itself doesn't assume a role.
-  orders              Order[]
-  passwordResetTokens PasswordResetToken[]
+  orders                Order[]
+  passwordResetTokens   PasswordResetToken[]
   /// Reviews this user has left as a customer — see Review below.
-  reviews             Review[]
-  sessions            Session[]
-  tier1Reviews        Tier1Verification[]    @relation("Tier1Reviewer")
-  tier2Evaluations    Tier2SkillTest[]       @relation("Tier2Evaluator")
-  tier3Reviews        Tier3PoliceClearance[] @relation("Tier3Reviewer")
-  worker              Worker?
+  reviews               Review[]
+  sessions              Session[]
+  tier1Reviews          Tier1Verification[]    @relation("Tier1Reviewer")
+  tier2Evaluations      Tier2SkillTest[]       @relation("Tier2Evaluator")
+  tier3Reviews          Tier3PoliceClearance[] @relation("Tier3Reviewer")
+  worker                Worker?
+  /// Workshops this user signed up to attend — see WorkshopRegistration below.
+  workshopRegistrations WorkshopRegistration[]
+  /// Workshops this admin created — see Workshop below.
+  workshopsCreated      Workshop[]             @relation("WorkshopCreatedBy")
 
   @@index([role])
 }
@@ -213,6 +221,8 @@ model Worker {
   jobRequestApplications JobRequestApplication[]
   partOrders             PartOrder[]
   favoritedBy            Favorite[]
+  /// Complaints filed against this worker - see Complaint above.
+  complaints             Complaint[]
   tier1Verification      Tier1Verification?
   tier2SkillTest         Tier2SkillTest?
   tier3PoliceClearance   Tier3PoliceClearance?
@@ -549,6 +559,79 @@ model Favorite {
 
   @@unique([customerId, workerId])
   @@index([customerId])
+}
+
+// =====================================================================
+// MODULE 3 (Adri): Workshops & training programs. An admin creates a
+// workshop, marks it free or paid, and any worker or customer can
+// register. No real payment gateway here - same simple approach as
+// Parts Billing, registering just records the fee that was agreed,
+// nothing is actually charged.
+// =====================================================================
+
+model Workshop {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  scheduledAt DateTime
+  isPaid      Boolean  @default(false)
+  /// Only set when isPaid is true.
+  feeBdt      Int?
+  createdById String
+  createdBy   User     @relation("WorkshopCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  registrations WorkshopRegistration[]
+}
+
+/// One user's registration for one workshop. Unique so the same
+/// person can't register for the same workshop twice.
+model WorkshopRegistration {
+  id           String   @id @default(cuid())
+  workshopId   String
+  workshop     Workshop @relation(fields: [workshopId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  registeredAt DateTime @default(now())
+
+  @@unique([workshopId, userId])
+  @@index([workshopId])
+}
+
+// =====================================================================
+// MODULE 2 (Adri): a customer can file a complaint against a worker,
+// an admin resolves it and can optionally reply. Not one of the PDF's
+// numbered features. Deliberately simple and NOT tied to a booking or
+// payment - keeps this separate from Jishan's still-unbuilt Module 2
+// F3 (dispute resolution + escrow settlement), which is specifically
+// about a completed, paid booking. This is closer to "report this
+// worker" than a financial dispute.
+// =====================================================================
+
+model Complaint {
+  id           String          @id @default(cuid())
+  customerId   String
+  customer     User            @relation("ComplaintsFiled", fields: [customerId], references: [id], onDelete: Cascade)
+  workerId     String
+  worker       Worker          @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  subject      String
+  description  String
+  status       ComplaintStatus @default(PENDING)
+  /// Set only once an admin resolves this complaint - see resolvedById/resolvedAt.
+  adminReply   String?
+  resolvedById String?
+  resolvedBy   User?           @relation("ComplaintsResolved", fields: [resolvedById], references: [id], onDelete: SetNull)
+  resolvedAt   DateTime?
+  createdAt    DateTime        @default(now())
+
+  @@index([customerId])
+  @@index([workerId])
+  @@index([status])
+}
+
+enum ComplaintStatus {
+  PENDING
+  RESOLVED
 }
 
 // =====================================================================

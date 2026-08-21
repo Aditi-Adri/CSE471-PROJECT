@@ -138,6 +138,43 @@ export function RadarIcon({ className = base }: IconProps) {
   );
 }
 
+export function FlagIcon({ className = base }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path d="M6 3v18" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+      <path
+        d="M6 4h12l-3 4 3 4H6"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function GraduationCapIcon({ className = base }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path
+        d="M12 4 3 8.5 12 13l9-4.5L12 4Z"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M7 10.5v3.5c0 1.4 2.2 2.8 5 2.8s5-1.4 5-2.8v-3.5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M20 8.5v5.5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 // MODULE 4 (Shiva): referral codes + coupon system.
 export function TagIcon({ className = base }: IconProps) {
   return (

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import {
   ClipboardCheckIcon,
+  FlagIcon,
+  GraduationCapIcon,
   IdCardIcon,
   MapPinIcon,
   MessageIcon,
@@ -63,6 +65,18 @@ function getQuickLinks(role: Role, hasWorkerProfile: boolean): QuickLink[] {
           icon: StarIcon,
         },
         {
+          href: "/dashboard/workshops",
+          title: "Workshops",
+          description: "Free and paid workshops and training programmes you can register for.",
+          icon: GraduationCapIcon,
+        },
+        {
+          href: "/dashboard/complaints",
+          title: "My complaints",
+          description: "Complaints you've filed against workers, and any admin reply.",
+          icon: FlagIcon,
+        },
+        {
           href: "/dashboard/coupons",
           title: "My coupons",
           description: "Codes you can apply at checkout in the spare parts shop.",
@@ -107,6 +121,12 @@ function getQuickLinks(role: Role, hasWorkerProfile: boolean): QuickLink[] {
           icon: MapPinIcon,
         },
         {
+          href: "/dashboard/workshops",
+          title: "Workshops",
+          description: "Free and paid workshops and training programmes you can register for.",
+          icon: GraduationCapIcon,
+        },
+        {
           href: "/dashboard/coupons",
           title: "My coupons",
           description: "Codes you can apply at checkout in the spare parts shop.",
@@ -127,6 +147,18 @@ function getQuickLinks(role: Role, hasWorkerProfile: boolean): QuickLink[] {
           title: "Review moderation",
           description: "Fraud-flagged customer reviews, surfaced for a human decision.",
           icon: ShieldCheckIcon,
+        },
+        {
+          href: "/admin/workshops",
+          title: "Workshops",
+          description: "Create a free or paid workshop and see who has registered.",
+          icon: GraduationCapIcon,
+        },
+        {
+          href: "/admin/complaints",
+          title: "Complaints",
+          description: "What customers have reported about workers — resolve each one.",
+          icon: FlagIcon,
         },
         {
           href: "/admin/coupons",
