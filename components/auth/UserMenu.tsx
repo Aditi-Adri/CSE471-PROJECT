@@ -106,25 +106,51 @@ export function UserMenu() {
               >
                 Shop
               </Link>
+              {/* MODULE 3 (Adri): Workshops & training programs. */}
+              <Link
+                href="/dashboard/workshops"
+                onClick={() => setOpen(false)}
+                className="block px-4 py-2 text-sm text-zinc-700 transition hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                Workshops
+              </Link>
             </>
           )}
           {(session.user.role === "CUSTOMER" || session.user.role === "CORPORATE") && (
-            <Link
-              href="/dashboard/favorites"
-              onClick={() => setOpen(false)}
-              className="block px-4 py-2 text-sm text-zinc-700 transition hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            >
-              My favorites
-            </Link>
+            <>
+              <Link
+                href="/dashboard/favorites"
+                onClick={() => setOpen(false)}
+                className="block px-4 py-2 text-sm text-zinc-700 transition hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                My favorites
+              </Link>
+              <Link
+                href="/dashboard/workshops"
+                onClick={() => setOpen(false)}
+                className="block px-4 py-2 text-sm text-zinc-700 transition hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                Workshops
+              </Link>
+            </>
           )}
           {session.user.role === "ADMIN" && (
-            <Link
-              href="/admin/verifications"
-              onClick={() => setOpen(false)}
-              className="block px-4 py-2 text-sm text-zinc-700 transition hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            >
-              Verification queue
-            </Link>
+            <>
+              <Link
+                href="/admin/verifications"
+                onClick={() => setOpen(false)}
+                className="block px-4 py-2 text-sm text-zinc-700 transition hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                Verification queue
+              </Link>
+              <Link
+                href="/admin/workshops"
+                onClick={() => setOpen(false)}
+                className="block px-4 py-2 text-sm text-zinc-700 transition hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                Workshops
+              </Link>
+            </>
           )}
           <button
             type="button"

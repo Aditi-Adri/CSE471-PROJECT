@@ -1,6 +1,7 @@
 import Link from "next/link";
 import {
   ClipboardCheckIcon,
+  GraduationCapIcon,
   IdCardIcon,
   MapPinIcon,
   MessageIcon,
@@ -61,6 +62,12 @@ function getQuickLinks(role: Role, hasWorkerProfile: boolean): QuickLink[] {
           description: "Workers you've saved — book them again without searching.",
           icon: StarIcon,
         },
+        {
+          href: "/dashboard/workshops",
+          title: "Workshops",
+          description: "Free and paid workshops and training programmes you can register for.",
+          icon: GraduationCapIcon,
+        },
       ];
 
     case "WORKER":
@@ -99,6 +106,12 @@ function getQuickLinks(role: Role, hasWorkerProfile: boolean): QuickLink[] {
           description: "A heatmap of which Dhaka neighborhoods need workers most, right now.",
           icon: MapPinIcon,
         },
+        {
+          href: "/dashboard/workshops",
+          title: "Workshops",
+          description: "Free and paid workshops and training programmes you can register for.",
+          icon: GraduationCapIcon,
+        },
       ];
 
     case "ADMIN":
@@ -114,6 +127,12 @@ function getQuickLinks(role: Role, hasWorkerProfile: boolean): QuickLink[] {
           title: "Review moderation",
           description: "Fraud-flagged customer reviews, surfaced for a human decision.",
           icon: ShieldCheckIcon,
+        },
+        {
+          href: "/admin/workshops",
+          title: "Workshops",
+          description: "Create a free or paid workshop and see who has registered.",
+          icon: GraduationCapIcon,
         },
       ];
   }
