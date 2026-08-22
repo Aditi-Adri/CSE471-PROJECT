@@ -21,6 +21,12 @@ export function CreateWorkshopForm({ onCreated }: { onCreated: () => void }) {
     setError(null);
     setSubmitting(true);
 
+    // Only send a fee if this workshop is actually paid.
+    let feeToSend = undefined;
+    if (isPaid) {
+      feeToSend = Number(feeBdt);
+    }
+
     try {
       const res = await fetch("/api/workshops", {
         method: "POST",
@@ -30,7 +36,7 @@ export function CreateWorkshopForm({ onCreated }: { onCreated: () => void }) {
           description,
           scheduledAt: new Date(scheduledAt).toISOString(),
           isPaid,
-          feeBdt: isPaid ? Number(feeBdt) : undefined,
+          feeBdt: feeToSend,
         }),
       });
 
