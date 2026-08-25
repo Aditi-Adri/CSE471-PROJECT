@@ -22,7 +22,7 @@ type BillingData = {
 
 /**
  * MODULE 3 -> FEATURE 3 (Corporate Portal): monthly billing summary
- * card with a toggleable breakdown table and CSV download.
+ * card with a toggleable breakdown table 
  */
 export function MonthlyInvoiceCard({ refreshKey }: { refreshKey?: number }) {
   const [data, setData] = useState<BillingData | null>(null);

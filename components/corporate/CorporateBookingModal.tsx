@@ -31,7 +31,7 @@ type WorkerResult = {
 };
 
 /**
- * MODULE 3 -> FEATURE 3 (Corporate Portal): modal for placing a
+ * MODULE 3 -> FEATURE 3 (Jishan- Corporate Portal): modal for placing a
  * corporate-tagged booking from a specific managed property. The modal
  * lets the user search for a technician, pick one, propose a rate, and
  * POST to /api/corporate/bookings.
@@ -218,9 +218,7 @@ export function CorporateBookingModal({
                 className={inputClasses}
                 placeholder={`e.g. ${selectedWorker.hourlyRateMinBdt}`}
               />
-              <span className="text-xs text-zinc-400">
-                {selectedWorker.name}&apos;s range: {formatRateRange(selectedWorker.hourlyRateMinBdt, selectedWorker.hourlyRateMaxBdt)}
-              </span>
+              
             </label>
           )}
 
