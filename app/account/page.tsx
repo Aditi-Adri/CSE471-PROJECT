@@ -10,6 +10,8 @@ import { ProfileSettingsForm } from "@/components/dashboard/ProfileSettingsForm"
 import { PasswordSettingsForm } from "@/components/dashboard/PasswordSettingsForm";
 // MODULE 3 (Sudiptha): Spare Parts Shop order history.
 import { OrderHistory } from "@/components/dashboard/OrderHistory";
+// MODULE 3 -> Worker Subscription & Working Radius (new feature).
+import { SubscriptionStatusCard } from "@/components/subscription/SubscriptionStatusCard";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -83,6 +85,8 @@ export default async function AccountPage() {
             memberSince={user.createdAt}
             verificationTier={user.worker?.verificationTier}
           />
+          {/* MODULE 3 -> Worker Subscription & Working Radius (new feature) — workers only. */}
+          {user.role === "WORKER" && user.worker && <SubscriptionStatusCard />}
           <PasswordSettingsForm hasPassword={Boolean(user.passwordHash)} />
         </div>
       </div>
