@@ -186,6 +186,14 @@ export function WorkerProfileForm() {
           </label>
         </div>
 
+        {/* MODULE 3 -> Worker Subscription & Working Radius (new feature):
+            every worker starts on the free Basic plan's fixed 1km radius —
+            no choice needed here. Buying a subscription later (see
+            /dashboard/worker/subscription) is what widens it. */}
+        <p className="-mb-1 text-xs text-zinc-400">
+          You&apos;ll start on the free Basic plan (1km radius) — you can upgrade anytime from your dashboard.
+        </p>
+
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Address / working area detail</span>
           <input

@@ -12,6 +12,8 @@ import { PasswordSettingsForm } from "@/components/dashboard/PasswordSettingsFor
 import { OrderHistory } from "@/components/dashboard/OrderHistory";
 // MODULE 4 (Shiva): referral codes + coupons.
 import { ReferralCard } from "@/components/coupons/ReferralCard";
+// MODULE 3 -> Worker Subscription & Working Radius (new feature).
+import { SubscriptionStatusCard } from "@/components/subscription/SubscriptionStatusCard";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -86,6 +88,8 @@ export default async function AccountPage() {
             verificationTier={user.worker?.verificationTier}
           />
           <ReferralCard />
+          {/* MODULE 3 -> Worker Subscription & Working Radius (new feature) — workers only. */}
+          {user.role === "WORKER" && user.worker && <SubscriptionStatusCard />}
           <PasswordSettingsForm hasPassword={Boolean(user.passwordHash)} />
         </div>
       </div>

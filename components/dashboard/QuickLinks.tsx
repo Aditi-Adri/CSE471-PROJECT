@@ -13,7 +13,7 @@ import {
   WrenchIcon,
 } from "@/components/marketing/icons";
 import type { Role } from "@/app/generated/prisma/client";
-import { ChevronRightIcon, SearchIcon } from "./icons";
+import { ChevronRightIcon, CrownIcon, SearchIcon } from "./icons";
 
 type QuickLink = {
   href: string;
@@ -131,6 +131,12 @@ function getQuickLinks(role: Role, hasWorkerProfile: boolean): QuickLink[] {
           title: "My coupons",
           description: "Codes you can apply at checkout in the spare parts shop.",
           icon: TagIcon,
+        },
+        {
+          href: "/dashboard/worker/subscription",
+          title: "Subscription",
+          description: "Upgrade your plan to widen your service radius and get more leads.",
+          icon: CrownIcon,
         },
       ];
 

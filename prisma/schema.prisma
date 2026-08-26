@@ -212,6 +212,25 @@ model Worker {
   /// =====================================================================
   trustScore             Float?
   trustScoreUpdatedAt    DateTime?
+  /// =====================================================================
+  /// MODULE 3 -> Worker Subscription & Working Radius (new feature).
+  ///
+  /// Every worker has exactly one "how far my listing reaches" setting.
+  /// `serviceRadiusKm` is what actually gets drawn as the map circle —
+  /// it starts at the free Basic range (1km) and only grows while a paid
+  /// plan is active. `subscriptionTier` always matches one row in
+  /// lib/constants/subscriptionPlans.ts; BASIC never expires, so
+  /// `subscriptionExpiresAt` stays null for it. A paid tier's expiry is
+  /// checked lazily on read instead of needing a background cron job —
+  /// same "keep it simple" spirit as the rest of this codebase.
+  /// `subscriptionTrialUsed` just stops the one-time 30-day free trial
+  /// from being claimed twice.
+  /// =====================================================================
+  serviceRadiusKm        Float                   @default(1)
+  subscriptionTier       SubscriptionTier        @default(BASIC)
+  subscriptionExpiresAt  DateTime?
+  subscriptionTrialUsed  Boolean                 @default(false)
+  subscriptionOrders     SubscriptionOrder[]
   reviews                Review[]
   availability           AvailabilitySlot[]
   /// Open requests this worker has been hired for, and every request
@@ -846,6 +865,50 @@ enum CouponDiscountType {
 enum CouponSource {
   ADMIN
   REFERRAL
+}
+
+// =====================================================================
+// MODULE 3 -> Worker Subscription & Working Radius (new feature).
+//
+// One row per subscription purchase (including a free 30-day trial,
+// where amountBdt is 0). Deliberately shaped just like Order above —
+// same PaymentStatus enum, same tranId/valId/cardType/paidAt columns —
+// so it reuses the exact same SSLCommerz flow (lib/payments/sslcommerz.ts)
+// instead of a second payment integration. Once a row is confirmed PAID,
+// the worker's Worker.subscriptionTier / subscriptionExpiresAt /
+// serviceRadiusKm are updated to match — see
+// lib/payments/confirmSubscriptionPayment.ts.
+// =====================================================================
+model SubscriptionOrder {
+  id            String           @id @default(cuid())
+  workerId      String
+  worker        Worker           @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  plan          SubscriptionTier
+  amountBdt     Int
+  /// True for the one-time 30-day free trial (amountBdt is 0 that time).
+  isTrial       Boolean          @default(false)
+  durationDays  Int
+  paymentStatus PaymentStatus    @default(PENDING)
+  tranId        String           @unique
+  valId         String?
+  cardType      String?
+  paidAt        DateTime?
+  createdAt     DateTime         @default(now())
+
+  @@index([workerId])
+  @@index([paymentStatus])
+}
+
+/// MODULE 3 -> Worker Subscription & Working Radius (new feature): the
+/// plan tiers a worker can be on. Matches the cards in
+/// lib/constants/subscriptionPlans.ts one-to-one — BASIC is the
+/// always-free default every worker starts on.
+enum SubscriptionTier {
+  BASIC
+  STARTER
+  STANDARD
+  PREMIUM
+  UNLIMITED
 }
 
 enum Role {

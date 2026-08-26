@@ -43,3 +43,18 @@ export function ChevronRightIcon({ className = "h-4 w-4" }: IconProps) {
     </svg>
   );
 }
+
+/** MODULE 3 -> Worker Subscription & Working Radius (new feature): used for the "Subscription" quick link. */
+export function CrownIcon({ className = base }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path
+        d="m4 8 3.5 3L12 6l4.5 5L20 8l-1.5 9h-13L4 8Z"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
