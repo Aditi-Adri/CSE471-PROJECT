@@ -9,6 +9,7 @@ import { WorkerOnlinePanel } from "@/components/tracking/WorkerOnlinePanel";
 import { TrustScoreDetails } from "@/components/trust/TrustScoreDetails";
 import { ReviewList } from "@/components/reviews/ReviewList";
 import { getTrustBreakdown } from "@/lib/trust/recomputeTrustScore";
+import { WorkerIncomeDashboard } from "@/components/worker/WorkerIncomeDashboard";
 
 export const metadata: Metadata = { title: "Worker dashboard" };
 
@@ -55,6 +56,11 @@ export default async function WorkerJobDashboardPage() {
       <section>
         <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-50">Booking requests</h2>
         <WorkerJobsList />
+      </section>
+
+      {/* Income Intelligence Dashboard — Aditi: isolated analytics panel */}
+      <section>
+        <WorkerIncomeDashboard />
       </section>
 
       <section>
