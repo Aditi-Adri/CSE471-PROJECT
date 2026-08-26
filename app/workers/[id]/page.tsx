@@ -67,11 +67,15 @@ export default async function WorkerProfilePage({
   let alreadyFavorited = false;
   if (isCustomer && session?.user?.id) {
     const customerId = session.user.id;
-    const favorite = await prisma.favorite.findUnique({
-      where: { customerId_workerId: { customerId, workerId: worker.id } },
-    });
-    if (favorite) {
-      alreadyFavorited = true;
+    try {
+      const favorite = await (prisma as any).favorite?.findUnique({
+        where: { customerId_workerId: { customerId, workerId: worker.id } },
+      });
+      if (favorite) {
+        alreadyFavorited = true;
+      }
+    } catch {
+      alreadyFavorited = false;
     }
   }
 

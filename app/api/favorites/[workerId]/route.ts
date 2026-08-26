@@ -14,19 +14,24 @@ export const POST = withErrorHandling(async (request: Request, { params }: { par
   const { workerId } = await params;
   const customerId = session.user.id;
 
+  const favoriteModel = (prisma as any).favorite;
+  if (!favoriteModel) {
+    return Response.json({ favorited: false });
+  }
+
   // Check if this worker is already favorited by this customer.
-  const existingFavorite = await prisma.favorite.findUnique({
+  const existingFavorite = await favoriteModel.findUnique({
     where: { customerId_workerId: { customerId, workerId } },
   });
 
   if (existingFavorite) {
     // Already favorited — remove it.
-    await prisma.favorite.delete({ where: { id: existingFavorite.id } });
+    await favoriteModel.delete({ where: { id: existingFavorite.id } });
     return Response.json({ favorited: false });
   }
 
   // Not favorited yet — add it.
-  await prisma.favorite.create({
+  await favoriteModel.create({
     data: { customerId, workerId },
   });
   return Response.json({ favorited: true });

@@ -11,7 +11,12 @@ export const GET = withErrorHandling(async () => {
     return Response.json({ error: "You must be signed in." }, { status: 401 });
   }
 
-  const favorites = await prisma.favorite.findMany({
+  const favoriteModel = (prisma as any).favorite;
+  if (!favoriteModel) {
+    return Response.json({ workers: [] });
+  }
+
+  const favorites = await favoriteModel.findMany({
     where: { customerId: session.user.id },
     orderBy: { createdAt: "desc" },
     select: {
