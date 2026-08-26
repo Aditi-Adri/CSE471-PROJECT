@@ -81,6 +81,9 @@ model User {
   workshopRegistrations WorkshopRegistration[]
   /// Workshops this admin created — see Workshop below.
   workshopsCreated      Workshop[]             @relation("WorkshopCreatedBy")
+  /// MODULE 3 -> FEATURE 3 (Corporate Portal): named property addresses
+  /// managed by a CORPORATE user — see CorporateProperty below.
+  corporateProperties   CorporateProperty[]    @relation("CorporateProperties")
 
   @@index([role])
 }
@@ -312,30 +315,30 @@ model SearchLog {
 
 /// Tracks customer bookings and en-route technician status
 model Booking {
-  id                 String        @id @default(cuid())
-  customerId         String
-  customerPhone      String?
-  workerId           String?
-  status             BookingStatus @default(PENDING)
-  destinationLat     Float
-  destinationLng     Float
-  etaMinutes         Int?
-  tenMinuteAlertSent Boolean       @default(false)
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
+  id                  String        @id @default(cuid())
+  customerId          String
+  customerPhone       String?
+  workerId            String?
+  status              BookingStatus @default(PENDING)
+  destinationLat      Float
+  destinationLng      Float
+  etaMinutes          Int?
+  tenMinuteAlertSent  Boolean       @default(false)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
   /// The rate both sides actually settled on (proposed or countered).
-  agreedRateBdt      Int?
+  agreedRateBdt       Int?
   /// Plaintext, short-lived, single-use, rate-limited on verification —
   /// not a secret exchanged out-of-band, more a "this is genuinely the
   /// accepted worker's own session confirming" checkpoint than a
   /// cryptographic boundary. See docs/FEATURE_SPEC.md's booking-flow
   /// notes for the full reasoning.
-  arrivalCode        String?
-  arrivalVerifiedAt  DateTime?
+  arrivalCode         String?
+  arrivalVerifiedAt   DateTime?
   /// What the worker countered with, if they didn't just accept.
-  counterRateBdt     Int?
+  counterRateBdt      Int?
   /// What the customer offered when requesting the booking.
-  proposedRateBdt    Int?
+  proposedRateBdt     Int?
   /// =====================================================================
   /// MODULE 1 -> FEATURE 4 (Sudiptha): real booking request + rate
   /// bargaining + arrival-code confirmation gate.
@@ -347,21 +350,35 @@ model Booking {
   /// later). Both stay null/hidden to the worker until
   /// `arrivalVerifiedAt` is set — see app/api/bookings/[id]/route.ts.
   /// =====================================================================
-  serviceAddress     String?
+  serviceAddress      String?
   /// MODULE 2 -> FEATURE 1 (Shiva): when the worker first responded
   /// (accept/reject/counter) to this request — powers the
   /// Responsiveness trust-score metric. Distinct from `updatedAt`,
   /// which keeps moving on every later step (verify-code, complete, a
   /// counter-offer, ...) so it can't be reused for this.
-  respondedAt        DateTime?
+  respondedAt         DateTime?
   /// When this booking's status actually became COMPLETED — the
   /// review window (72h, see lib/trust/reviewEligibility.ts) is
   /// measured from here, same reasoning as respondedAt above.
-  completedAt        DateTime?
-  review             Review?
+  completedAt         DateTime?
+  review              Review?
+  /// =====================================================================
+  /// MODULE 3 -> FEATURE 3 (Corporate Portal): corporate-tagged bookings.
+  ///
+  /// When a CORPORATE user books a technician for one of their managed
+  /// properties, `isCorporateBill` is set true and the property id is
+  /// recorded so the monthly invoice can aggregate costs per-property.
+  /// `requestedByRole` is a snapshot of the booker's role at the time —
+  /// kept as a plain string, not a Role enum, because the booking record
+  /// must survive even if roles evolve later.
+  /// =====================================================================
+  isCorporateBill     Boolean       @default(false)
+  requestedByRole     String?
+  corporatePropertyId String?
 
   @@index([workerId])
   @@index([customerId])
+  @@index([isCorporateBill])
 }
 
 /// Emergency SOS requests within a 3km radius (Module 1 F3, Jishan).
@@ -909,6 +926,32 @@ enum SubscriptionTier {
   STANDARD
   PREMIUM
   UNLIMITED
+}
+
+// =====================================================================
+// MODULE 3 -> FEATURE 3 (Corporate Portal): multi-property management.
+//
+// A CORPORATE user can register several office/building addresses under
+// their account.  Each property can be independently selected when
+// placing a maintenance booking, and the monthly invoice groups costs
+// by property.  `label` is the user-facing nickname ("Banani Building"),
+// `address` is the full street address snapshot used for the service
+// visit, `area` controls which Dhaka zone the technician search is
+// scoped to.
+// =====================================================================
+model CorporateProperty {
+  id              String    @id @default(cuid())
+  corporateUserId String
+  corporateUser   User      @relation("CorporateProperties", fields: [corporateUserId], references: [id], onDelete: Cascade)
+  label           String
+  address         String
+  area            DhakaArea
+  contactName     String?
+  contactPhone    String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([corporateUserId])
 }
 
 enum Role {

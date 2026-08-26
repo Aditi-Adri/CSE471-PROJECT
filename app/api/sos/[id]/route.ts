@@ -29,6 +29,18 @@ export const GET = withErrorHandling(
     }
 
     if (sos.customerId === session.user.id) {
+      // When ACCEPTED, include the responding worker's name and ETA so
+      // the customer SOS page can render the "accepted" state even when
+      // the socket push was missed (polling fallback).
+      let workerName: string | null = null;
+      if (sos.status === "ACCEPTED" && sos.acceptedWorkerId) {
+        const acceptedWorker = await prisma.worker.findUnique({
+          where: { id: sos.acceptedWorkerId },
+          include: { user: { select: { name: true } } },
+        });
+        workerName = acceptedWorker?.user.name ?? null;
+      }
+
       return Response.json({
         sos: {
           id: sos.id,
@@ -36,6 +48,8 @@ export const GET = withErrorHandling(
           radiusKm: sos.radiusKm,
           alertedWorkerCount: sos.alertedWorkerIds.length,
           bookingId: sos.bookingId,
+          etaMinutes: sos.etaMinutes,
+          workerName,
           createdAt: sos.createdAt,
         },
       });

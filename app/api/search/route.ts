@@ -44,8 +44,8 @@ export async function GET(request: Request) {
       availableNow: searchParams.get("availableNow") === "true" ? true : undefined,
     },
     sort: searchParams.get("sort") || undefined,
-    page: parseIntParam(searchParams.get("page")),
-    pageSize: parseIntParam(searchParams.get("pageSize")),
+    page: parseIntParam(searchParams.get("page")) ?? 1,
+    pageSize: parseIntParam(searchParams.get("pageSize")) ?? 10,
   });
 
   if (!parsed.success) {

@@ -3,6 +3,7 @@ import {
   ClipboardCheckIcon,
   FlagIcon,
   GraduationCapIcon,
+  GridIcon,
   IdCardIcon,
   MapPinIcon,
   MessageIcon,
@@ -31,8 +32,35 @@ type QuickLink = {
  */
 function getQuickLinks(role: Role, hasWorkerProfile: boolean): QuickLink[] {
   switch (role) {
-    case "CUSTOMER":
     case "CORPORATE":
+      return [
+        {
+          href: "/dashboard/corporate",
+          title: "Corporate Portal",
+          description: "Manage multi-property addresses, view aggregated billing, and book services.",
+          icon: GridIcon,
+        },
+        {
+          href: "/search",
+          title: "Find a technician",
+          description: "Search verified local workers by service, area, or budget.",
+          icon: SearchIcon,
+        },
+        {
+          href: "/bookings",
+          title: "My bookings",
+          description: "See who you've booked, negotiate a rate, and track the arrival code.",
+          icon: ClipboardCheckIcon,
+        },
+        {
+          href: "/sos",
+          title: "Emergency SOS",
+          description: "One tap alerts every verified technician online within 3km of you.",
+          icon: SirenIcon,
+        },
+      ];
+
+    case "CUSTOMER":
       return [
         {
           href: "/search",
