@@ -44,14 +44,18 @@ export function SubscriptionPlansView({ workerId }: { workerId: string }) {
   // card they click so they can see the radius change before buying.
   const [previewTier, setPreviewTier] = useState<SubscriptionTier>("BASIC");
 
-  useEffect(() => {
-    if (status) setPreviewTier(status.subscriptionTier);
-  }, [status]);
-
   const refetch = useCallback(() => {
     return fetch("/api/subscription/status")
       .then((res) => res.json())
-      .then((data) => setStatus(data.worker ?? null))
+      .then((data) => {
+        const worker: SubscriptionStatus | null = data.worker ?? null;
+        setStatus(worker);
+        // Set together with `status` (not in a separate effect watching
+        // it) so the map preview only ever resets to the real plan
+        // right after a fetch, never fighting a click the worker made
+        // in between.
+        if (worker) setPreviewTier(worker.subscriptionTier);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -60,14 +64,22 @@ export function SubscriptionPlansView({ workerId }: { workerId: string }) {
 
     // If SSLCommerz just redirected us back here, show a one-time
     // banner based on the `?payment=` flag — same pattern the Spare
-    // Parts Shop cart page uses for its own payment redirects.
+    // Parts Shop cart page uses for its own payment redirects. Reading
+    // window.location genuinely needs to happen in an effect (it's
+    // unavailable during server rendering), so the resulting setState
+    // calls are a legitimate one-time "read an external system on
+    // mount" case rather than the derived-state pattern this lint rule
+    // is meant to catch.
     const params = new URLSearchParams(window.location.search);
     const payment = params.get("payment");
+    /* eslint-disable react-hooks/set-state-in-effect -- reading window.location on
+       mount, not deriving from React state; see comment above */
     if (payment === "success") setMessage({ kind: "success", text: "Payment confirmed — your plan is now active!" });
     else if (payment === "failed") setMessage({ kind: "error", text: "That payment failed. Please try again." });
     else if (payment === "cancelled") setMessage({ kind: "error", text: "Payment was cancelled." });
     else if (payment === "unconfirmed")
       setMessage({ kind: "error", text: "We couldn't confirm that payment. If money left your account, contact support." });
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [refetch]);
 
   async function buyPlan(tier: SubscriptionTier) {
