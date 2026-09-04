@@ -1,27 +1,13 @@
-/**
- * Optional AI classification path using Groq's free tier
- * (https://console.groq.com — no billing required for the free-tier
- * request quota; runs open models like Llama at very high speed).
- *
- * This is intentionally NOT the primary path — see categoryMapper.ts.
- * It's a straight swap-in for the "OpenAI API" call described in the
- * project spec's Module 1 / Feature 2 requirement: same job (map free
- * text -> a known service category), same "send the text server-side to
- * an LLM" shape, just pointed at a provider with a genuinely free tier
- * instead of a paid one, per the team's free-APIs-only constraint.
- *
- * (We originally wired this up against Google's Gemini API — see git
- * history — but free-tier access was blocked for the account available
- * to us. Groq's API is OpenAI-compatible, which is why the request
- * shape below looks like a standard chat-completions call.)
- *
- * Every call is wrapped in a timeout and never throws — on any failure
- * (missing key, network error, quota, bad response) it resolves to
- * `null` and the caller (categoryMapper.ts) falls back to the keyword
- * engine automatically.
- */
+// Calls Groq's free AI API (https://console.groq.com) — used for
+// category classification (below) and for the heatmap's AI summary
+// sentence (summarizeOpportunitiesWithGroq, further down). Every call
+// has a timeout and never throws: on any failure it just returns null,
+// and the caller falls back to a non-AI method automatically.
 
-const DEFAULT_MODEL = "llama-3.3-70b-versatile";
+// Groq retires old models sometimes — if this ever starts always
+// falling back (matchMethod "KEYWORD" even with a real API key set),
+// check https://console.groq.com/docs/models for the current name.
+const DEFAULT_MODEL = "openai/gpt-oss-120b";
 const DEFAULT_TIMEOUT_MS = 5000;
 
 export type GroqCategoryResult = {
@@ -100,15 +86,10 @@ export async function classifyWithGroq(
   }
 }
 
-/**
- * Second use of the same free Groq call, this time plain-text
- * summarization rather than classification — turns the neighborhood
- * demand heatmap's raw per-area numbers (lib/opportunities/
- * demandScore.ts) into one short, actionable sentence for a worker.
- * Same never-throws-returns-null-on-any-failure contract as
- * classifyWithGroq — see lib/opportunities/opportunityInsight.ts for
- * the deterministic fallback that takes over when this returns null.
- */
+// Same Groq call, but for plain-text summarizing instead of
+// classifying — turns the heatmap's per-area numbers into one short
+// sentence for a worker. Same "never throws, returns null on failure"
+// behavior as classifyWithGroq above.
 export async function summarizeOpportunitiesWithGroq(
   prompt: string,
   opts: { apiKey: string; model?: string; timeoutMs?: number }
@@ -130,7 +111,10 @@ export async function summarizeOpportunitiesWithGroq(
       body: JSON.stringify({
         model,
         temperature: 0.4,
-        max_tokens: 120,
+        // This model "thinks" before writing its answer, which also
+        // uses up tokens — so the cap needs to be generous even for a
+        // short ~30-word reply, or the answer comes back empty.
+        max_tokens: 500,
         messages: [
           {
             role: "system",

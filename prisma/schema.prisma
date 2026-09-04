@@ -17,41 +17,73 @@ datasource db {
 /// PasswordResetToken table for the forgot-password flow.
 /// =====================================================================
 model User {
-  id                  String                 @id @default(cuid())
-  name                String
-  email               String                 @unique
-  emailVerified       DateTime?
-  image               String?
-  phone               String?                @unique
-  passwordHash        String?
-  role                Role                   @default(CUSTOMER)
+  id                    String                 @id @default(cuid())
+  name                  String
+  email                 String                 @unique
+  emailVerified         DateTime?
+  image                 String?
+  phone                 String?                @unique
+  passwordHash          String?
+  role                  Role                   @default(CUSTOMER)
   /// Account-lockout rate limiting for the credentials login flow (see
   /// lib/auth/authOptions.ts). Reset on a successful login.
-  failedLoginAttempts Int                    @default(0)
-  lockedUntil         DateTime?
-  createdAt           DateTime               @default(now())
-  updatedAt           DateTime               @updatedAt
+  failedLoginAttempts   Int                    @default(0)
+  lockedUntil           DateTime?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
   /// Customer's saved home/service address — set from the dashboard
   /// (see app/api/account/profile). Surfaced to the assigned worker
   /// only after a booking is confirmed (arrival-code match), never
   /// before — see docs/FEATURE_SPEC.md's booking-flow section.
-  address             String?
-  accounts            Account[]
+  address               String?
+  accounts              Account[]
+  /// Complaints this user filed as a customer - see Complaint below.
+  complaintsFiled       Complaint[]            @relation("ComplaintsFiled")
+  /// Complaints this admin resolved - see Complaint below.
+  complaintsResolved    Complaint[]            @relation("ComplaintsResolved")
+  /// MODULE 4 (Shiva): this user's own code to share — see Coupon
+  /// below. Generated lazily on first view (lib/referrals/referralCode.ts),
+  /// not at signup, so every account gets one without touching every
+  /// place a User row can be created (credentials register + Google
+  /// SSO via the NextAuth adapter).
+  referralCode          String?                @unique
+  /// Who this user signed up with the referral code of, if anyone —
+  /// set once, at registration, from lib/validation/authSchemas.ts'
+  /// optional `referralCode` field. Self-relation, not a separate
+  /// join table: a user is referred by at most one other user, ever.
+  referredById          String?
+  referredBy            User?                  @relation("UserReferrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals             User[]                 @relation("UserReferrals")
+  /// Coupons an admin created — see Coupon below.
+  createdCoupons        Coupon[]               @relation("CouponCreatedBy")
+  /// Private coupons issued straight to this user (e.g. a referral
+  /// reward) — see Coupon.issuedToUserId below.
+  issuedCoupons         Coupon[]               @relation("CouponIssuedTo")
+  couponRedemptions     CouponRedemption[]
+  /// Workers this customer has starred - see Favorite below.
+  favorites             Favorite[]
   /// Requests this user posted when a search came up with no matching
   /// category — see JobRequest below.
-  jobRequests         JobRequest[]
+  jobRequests           JobRequest[]
   /// Spare-parts orders this worker placed — see Order below. Named
   /// `orders`, not `workerOrders`: only workers buy from the shop
   /// today, but the field itself doesn't assume a role.
-  orders              Order[]
-  passwordResetTokens PasswordResetToken[]
+  orders                Order[]
+  passwordResetTokens   PasswordResetToken[]
   /// Reviews this user has left as a customer — see Review below.
-  reviews             Review[]
-  sessions            Session[]
-  tier1Reviews        Tier1Verification[]    @relation("Tier1Reviewer")
-  tier2Evaluations    Tier2SkillTest[]       @relation("Tier2Evaluator")
-  tier3Reviews        Tier3PoliceClearance[] @relation("Tier3Reviewer")
-  worker              Worker?
+  reviews               Review[]
+  sessions              Session[]
+  tier1Reviews          Tier1Verification[]    @relation("Tier1Reviewer")
+  tier2Evaluations      Tier2SkillTest[]       @relation("Tier2Evaluator")
+  tier3Reviews          Tier3PoliceClearance[] @relation("Tier3Reviewer")
+  worker                Worker?
+  /// Workshops this user signed up to attend — see WorkshopRegistration below.
+  workshopRegistrations WorkshopRegistration[]
+  /// Workshops this admin created — see Workshop below.
+  workshopsCreated      Workshop[]             @relation("WorkshopCreatedBy")
+  /// MODULE 3 -> FEATURE 3 (Corporate Portal): named property addresses
+  /// managed by a CORPORATE user — see CorporateProperty below.
+  corporateProperties   CorporateProperty[]    @relation("CorporateProperties")
 
   @@index([role])
 }
@@ -183,6 +215,25 @@ model Worker {
   /// =====================================================================
   trustScore             Float?
   trustScoreUpdatedAt    DateTime?
+  /// =====================================================================
+  /// MODULE 3 -> Worker Subscription & Working Radius (new feature).
+  ///
+  /// Every worker has exactly one "how far my listing reaches" setting.
+  /// `serviceRadiusKm` is what actually gets drawn as the map circle —
+  /// it starts at the free Basic range (1km) and only grows while a paid
+  /// plan is active. `subscriptionTier` always matches one row in
+  /// lib/constants/subscriptionPlans.ts; BASIC never expires, so
+  /// `subscriptionExpiresAt` stays null for it. A paid tier's expiry is
+  /// checked lazily on read instead of needing a background cron job —
+  /// same "keep it simple" spirit as the rest of this codebase.
+  /// `subscriptionTrialUsed` just stops the one-time 30-day free trial
+  /// from being claimed twice.
+  /// =====================================================================
+  serviceRadiusKm        Float                   @default(1)
+  subscriptionTier       SubscriptionTier        @default(BASIC)
+  subscriptionExpiresAt  DateTime?
+  subscriptionTrialUsed  Boolean                 @default(false)
+  subscriptionOrders     SubscriptionOrder[]
   reviews                Review[]
   availability           AvailabilitySlot[]
   /// Open requests this worker has been hired for, and every request
@@ -190,6 +241,10 @@ model Worker {
   /// JobRequestApplication below.
   hiredJobRequests       JobRequest[]            @relation("HiredForJobRequest")
   jobRequestApplications JobRequestApplication[]
+  partOrders             PartOrder[]
+  favoritedBy            Favorite[]
+  /// Complaints filed against this worker - see Complaint above.
+  complaints             Complaint[]
   tier1Verification      Tier1Verification?
   tier2SkillTest         Tier2SkillTest?
   tier3PoliceClearance   Tier3PoliceClearance?
@@ -260,30 +315,30 @@ model SearchLog {
 
 /// Tracks customer bookings and en-route technician status
 model Booking {
-  id                 String        @id @default(cuid())
-  customerId         String
-  customerPhone      String?
-  workerId           String?
-  status             BookingStatus @default(PENDING)
-  destinationLat     Float
-  destinationLng     Float
-  etaMinutes         Int?
-  tenMinuteAlertSent Boolean       @default(false)
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
+  id                  String        @id @default(cuid())
+  customerId          String
+  customerPhone       String?
+  workerId            String?
+  status              BookingStatus @default(PENDING)
+  destinationLat      Float
+  destinationLng      Float
+  etaMinutes          Int?
+  tenMinuteAlertSent  Boolean       @default(false)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
   /// The rate both sides actually settled on (proposed or countered).
-  agreedRateBdt      Int?
+  agreedRateBdt       Int?
   /// Plaintext, short-lived, single-use, rate-limited on verification —
   /// not a secret exchanged out-of-band, more a "this is genuinely the
   /// accepted worker's own session confirming" checkpoint than a
   /// cryptographic boundary. See docs/FEATURE_SPEC.md's booking-flow
   /// notes for the full reasoning.
-  arrivalCode        String?
-  arrivalVerifiedAt  DateTime?
+  arrivalCode         String?
+  arrivalVerifiedAt   DateTime?
   /// What the worker countered with, if they didn't just accept.
-  counterRateBdt     Int?
+  counterRateBdt      Int?
   /// What the customer offered when requesting the booking.
-  proposedRateBdt    Int?
+  proposedRateBdt     Int?
   /// =====================================================================
   /// MODULE 1 -> FEATURE 4 (Sudiptha): real booking request + rate
   /// bargaining + arrival-code confirmation gate.
@@ -295,21 +350,35 @@ model Booking {
   /// later). Both stay null/hidden to the worker until
   /// `arrivalVerifiedAt` is set — see app/api/bookings/[id]/route.ts.
   /// =====================================================================
-  serviceAddress     String?
+  serviceAddress      String?
   /// MODULE 2 -> FEATURE 1 (Shiva): when the worker first responded
   /// (accept/reject/counter) to this request — powers the
   /// Responsiveness trust-score metric. Distinct from `updatedAt`,
   /// which keeps moving on every later step (verify-code, complete, a
   /// counter-offer, ...) so it can't be reused for this.
-  respondedAt        DateTime?
+  respondedAt         DateTime?
   /// When this booking's status actually became COMPLETED — the
   /// review window (72h, see lib/trust/reviewEligibility.ts) is
   /// measured from here, same reasoning as respondedAt above.
-  completedAt        DateTime?
-  review             Review?
+  completedAt         DateTime?
+  review              Review?
+  /// =====================================================================
+  /// MODULE 3 -> FEATURE 3 (Corporate Portal): corporate-tagged bookings.
+  ///
+  /// When a CORPORATE user books a technician for one of their managed
+  /// properties, `isCorporateBill` is set true and the property id is
+  /// recorded so the monthly invoice can aggregate costs per-property.
+  /// `requestedByRole` is a snapshot of the booker's role at the time —
+  /// kept as a plain string, not a Role enum, because the booking record
+  /// must survive even if roles evolve later.
+  /// =====================================================================
+  isCorporateBill     Boolean       @default(false)
+  requestedByRole     String?
+  corporatePropertyId String?
 
   @@index([workerId])
   @@index([customerId])
+  @@index([isCorporateBill])
 }
 
 /// Emergency SOS requests within a 3km radius (Module 1 F3, Jishan).
@@ -442,6 +511,7 @@ model JobRequest {
   createdAt     DateTime         @default(now())
 
   applications JobRequestApplication[]
+  partOrders   PartOrder[]
 
   @@index([status])
   @@index([area])
@@ -459,11 +529,145 @@ model JobRequestApplication {
   jobRequest   JobRequest @relation(fields: [jobRequestId], references: [id], onDelete: Cascade)
   workerId     String
   worker       Worker     @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  /// The wage the worker is asking for this job. Shown to the customer
+  /// when picking who to hire.
+  wageBdt      Int
   appliedAt    DateTime   @default(now())
 
   @@unique([jobRequestId, workerId])
   @@index([jobRequestId])
   @@index([workerId])
+}
+
+// =====================================================================
+// MODULE 3 (Adri): worker buys spare parts for a job they're hired on.
+// Own simple models, separate from Sudiptha's shop (Item/Order) - a
+// PartOrder is always tied to a real JobRequest, and its cost gets
+// added to that job's bill instead of the worker paying for it via a
+// separate checkout.
+// =====================================================================
+
+model Part {
+  id         String          @id @default(cuid())
+  name       String
+  price      Int
+  stockQty   Int             @default(0)
+  orderItems PartOrderItem[]
+}
+
+/// One "buy parts for this job" trip by the hired worker.
+model PartOrder {
+  id           String          @id @default(cuid())
+  jobRequestId String
+  jobRequest   JobRequest      @relation(fields: [jobRequestId], references: [id], onDelete: Cascade)
+  workerId     String
+  worker       Worker          @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  createdAt    DateTime        @default(now())
+  items        PartOrderItem[]
+
+  @@index([jobRequestId])
+}
+
+model PartOrderItem {
+  id          String    @id @default(cuid())
+  partOrderId String
+  partOrder   PartOrder @relation(fields: [partOrderId], references: [id], onDelete: Cascade)
+  partId      String
+  part        Part      @relation(fields: [partId], references: [id], onDelete: Restrict)
+  quantity    Int
+  /// Price at the time it was bought - Part.price can change later,
+  /// this keeps the bill accurate to what was actually charged.
+  price       Int
+
+  @@index([partOrderId])
+}
+
+/// MODULE 4 (Adri): a customer starring a worker to rebook later, no
+/// search needed. Just a join between User and Worker - unique so the
+/// same worker can't be starred twice by the same customer.
+model Favorite {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   User     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  workerId   String
+  worker     Worker   @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([customerId, workerId])
+  @@index([customerId])
+}
+
+// =====================================================================
+// MODULE 3 (Adri): Workshops & training programs. An admin creates a
+// workshop, marks it free or paid, and any worker or customer can
+// register. No real payment gateway here - same simple approach as
+// Parts Billing, registering just records the fee that was agreed,
+// nothing is actually charged.
+// =====================================================================
+
+model Workshop {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  scheduledAt DateTime
+  isPaid      Boolean  @default(false)
+  /// Only set when isPaid is true.
+  feeBdt      Int?
+  createdById String
+  createdBy   User     @relation("WorkshopCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  registrations WorkshopRegistration[]
+}
+
+/// One user's registration for one workshop. Unique so the same
+/// person can't register for the same workshop twice.
+model WorkshopRegistration {
+  id           String   @id @default(cuid())
+  workshopId   String
+  workshop     Workshop @relation(fields: [workshopId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  registeredAt DateTime @default(now())
+
+  @@unique([workshopId, userId])
+  @@index([workshopId])
+}
+
+// =====================================================================
+// MODULE 2 (Adri): a customer can file a complaint against a worker,
+// an admin resolves it and can optionally reply. Not one of the PDF's
+// numbered features. Deliberately simple and NOT tied to a booking or
+// payment - keeps this separate from Jishan's still-unbuilt Module 2
+// F3 (dispute resolution + escrow settlement), which is specifically
+// about a completed, paid booking. This is closer to "report this
+// worker" than a financial dispute.
+// =====================================================================
+
+model Complaint {
+  id           String          @id @default(cuid())
+  customerId   String
+  customer     User            @relation("ComplaintsFiled", fields: [customerId], references: [id], onDelete: Cascade)
+  workerId     String
+  worker       Worker          @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  subject      String
+  description  String
+  status       ComplaintStatus @default(PENDING)
+  /// Set only once an admin resolves this complaint - see resolvedById/resolvedAt.
+  adminReply   String?
+  resolvedById String?
+  resolvedBy   User?           @relation("ComplaintsResolved", fields: [resolvedById], references: [id], onDelete: SetNull)
+  resolvedAt   DateTime?
+  createdAt    DateTime        @default(now())
+
+  @@index([customerId])
+  @@index([workerId])
+  @@index([status])
+}
+
+enum ComplaintStatus {
+  PENDING
+  RESOLVED
 }
 
 // =====================================================================
@@ -549,13 +753,13 @@ model Item {
 /// enforced, same "loose reference" the original migration shipped
 /// with.
 model Order {
-  id          Int         @id @default(autoincrement())
-  workerId    String
-  worker      User        @relation(fields: [workerId], references: [id], onDelete: Cascade)
-  jobId       String?
-  totalAmount Decimal     @db.Decimal(10, 2)
-  createdAt   DateTime    @default(now())
-  items       OrderItem[]
+  id               Int               @id @default(autoincrement())
+  workerId         String
+  worker           User              @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  jobId            String?
+  totalAmount      Decimal           @db.Decimal(10, 2)
+  createdAt        DateTime          @default(now())
+  items            OrderItem[]
   /// =====================================================================
   /// MODULE 3 (Shiva): SSLCommerz sandbox payment integration for the
   /// Spare Parts Shop checkout.
@@ -570,11 +774,17 @@ model Order {
   /// trusted on its own. See lib/payments/sslcommerz.ts for why this is
   /// optional/graceful-fallback, same free-APIs-only pattern as Groq.
   /// =====================================================================
-  paymentStatus PaymentStatus @default(PENDING)
-  tranId        String        @unique
-  valId         String?
-  cardType      String?
-  paidAt        DateTime?
+  paymentStatus    PaymentStatus     @default(PENDING)
+  tranId           String            @unique
+  valId            String?
+  cardType         String?
+  paidAt           DateTime?
+  /// MODULE 4 (Shiva): how much a coupon knocked off this order's item
+  /// total — see Coupon below. totalAmount above is already net of
+  /// this (what's actually charged); this field is only kept so the
+  /// bill can still show "you saved ৳X" without re-deriving it.
+  discountBdt      Int               @default(0)
+  couponRedemption CouponRedemption?
 
   @@index([workerId])
   @@index([jobId])
@@ -595,6 +805,153 @@ model OrderItem {
 
   @@index([orderId])
   @@index([itemId])
+}
+
+/// MODULE 4 (Shiva): referral codes + coupon system for the Spare Parts
+/// Shop checkout (app/api/shop/orders — the one real payment flow in
+/// the app; see lib/payments/sslcommerz.ts).
+///
+/// A Coupon is either admin-made (source: ADMIN, public unless someone
+/// sets issuedToUserId) or system-issued as a referral reward (source:
+/// REFERRAL, always private — issuedToUserId is the one person who can
+/// redeem it). Both go through the same redemption path:
+/// lib/coupons/couponEligibility.ts decides if a code is usable right
+/// now, lib/coupons/couponMath.ts turns it into a taka amount off, and
+/// a CouponRedemption row is what actually enforces "not twice" — see
+/// app/api/shop/orders/route.ts for where a code gets spent for real.
+model Coupon {
+  id             String             @id @default(cuid())
+  code           String             @unique
+  discountType   CouponDiscountType
+  /// PERCENT: 1-100 (percent off). FIXED: a flat BDT amount off.
+  /// Which one `value` means depends on discountType.
+  value          Int
+  /// Caps a PERCENT discount in taka so "50% off" can't blow up on a
+  /// large order. Ignored for FIXED. Null = uncapped.
+  maxDiscountBdt Int?
+  /// Order subtotal must be at least this before the coupon applies.
+  /// Null = no minimum.
+  minOrderBdt    Int?
+  /// Total redemptions allowed across every user. Null = unlimited.
+  usageLimit     Int?
+  /// Redemptions allowed per user. Almost always 1 — a referral reward
+  /// is inherently single-use since it's issued to one person.
+  perUserLimit   Int                @default(1)
+  isActive       Boolean            @default(true)
+  expiresAt      DateTime?
+  source         CouponSource       @default(ADMIN)
+  /// Set only for a private, single-user coupon (referral rewards
+  /// always set this). Null = public, anyone signed in can apply it.
+  issuedToUserId String?
+  issuedToUser   User?              @relation("CouponIssuedTo", fields: [issuedToUserId], references: [id], onDelete: Cascade)
+  /// The admin who created this, via /admin/coupons. Null for a
+  /// referral-issued coupon — nobody typed it in by hand.
+  createdById    String?
+  createdBy      User?              @relation("CouponCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime           @default(now())
+  redemptions    CouponRedemption[]
+
+  @@index([isActive])
+  @@index([issuedToUserId])
+}
+
+/// One coupon actually being spent on one order. Exists mainly so
+/// "has this user already used this code" and "how many times has
+/// this code been used, total" are real counts instead of trusting
+/// the client — see checkCouponEligibility in
+/// lib/coupons/couponEligibility.ts.
+model CouponRedemption {
+  id          String   @id @default(cuid())
+  couponId    String
+  coupon      Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId     Int      @unique
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  discountBdt Int
+  redeemedAt  DateTime @default(now())
+
+  @@index([couponId, userId])
+}
+
+enum CouponDiscountType {
+  PERCENT
+  FIXED
+}
+
+enum CouponSource {
+  ADMIN
+  REFERRAL
+}
+
+// =====================================================================
+// MODULE 3 -> Worker Subscription & Working Radius (new feature).
+//
+// One row per subscription purchase (including a free 30-day trial,
+// where amountBdt is 0). Deliberately shaped just like Order above —
+// same PaymentStatus enum, same tranId/valId/cardType/paidAt columns —
+// so it reuses the exact same SSLCommerz flow (lib/payments/sslcommerz.ts)
+// instead of a second payment integration. Once a row is confirmed PAID,
+// the worker's Worker.subscriptionTier / subscriptionExpiresAt /
+// serviceRadiusKm are updated to match — see
+// lib/payments/confirmSubscriptionPayment.ts.
+// =====================================================================
+model SubscriptionOrder {
+  id            String           @id @default(cuid())
+  workerId      String
+  worker        Worker           @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  plan          SubscriptionTier
+  amountBdt     Int
+  /// True for the one-time 30-day free trial (amountBdt is 0 that time).
+  isTrial       Boolean          @default(false)
+  durationDays  Int
+  paymentStatus PaymentStatus    @default(PENDING)
+  tranId        String           @unique
+  valId         String?
+  cardType      String?
+  paidAt        DateTime?
+  createdAt     DateTime         @default(now())
+
+  @@index([workerId])
+  @@index([paymentStatus])
+}
+
+/// MODULE 3 -> Worker Subscription & Working Radius (new feature): the
+/// plan tiers a worker can be on. Matches the cards in
+/// lib/constants/subscriptionPlans.ts one-to-one — BASIC is the
+/// always-free default every worker starts on.
+enum SubscriptionTier {
+  BASIC
+  STARTER
+  STANDARD
+  PREMIUM
+  UNLIMITED
+}
+
+// =====================================================================
+// MODULE 3 -> FEATURE 3 (Corporate Portal): multi-property management.
+//
+// A CORPORATE user can register several office/building addresses under
+// their account.  Each property can be independently selected when
+// placing a maintenance booking, and the monthly invoice groups costs
+// by property.  `label` is the user-facing nickname ("Banani Building"),
+// `address` is the full street address snapshot used for the service
+// visit, `area` controls which Dhaka zone the technician search is
+// scoped to.
+// =====================================================================
+model CorporateProperty {
+  id              String    @id @default(cuid())
+  corporateUserId String
+  corporateUser   User      @relation("CorporateProperties", fields: [corporateUserId], references: [id], onDelete: Cascade)
+  label           String
+  address         String
+  area            DhakaArea
+  contactName     String?
+  contactPhone    String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([corporateUserId])
 }
 
 enum Role {

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSocket } from "@/lib/hooks/useSocket";
 import { cardClasses, primaryButtonClasses } from "@/lib/ui/formStyles";
 
-type SosAlert = { sosId: string; distanceKm: number | null; createdAt: string };
+type SosAlert = { sosId: string; lat: number | null; lng: number | null; distanceKm: number | null; createdAt: string };
 
 /**
  * MODULE 1 -> FEATURE 3 (Jishan): the "go online" toggle that makes a
@@ -79,7 +79,7 @@ export function WorkerOnlinePanel({ workerId, initialIsOnline }: { workerId: str
           (pos) => {
             socket?.emit("worker:location", { workerId, lat: pos.coords.latitude, lng: pos.coords.longitude });
           },
-          () => {},
+          () => { },
           { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
         );
       },
@@ -101,7 +101,7 @@ export function WorkerOnlinePanel({ workerId, initialIsOnline }: { workerId: str
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ isOnline: false }),
-    }).catch(() => {});
+    }).catch(() => { });
     setIsBusy(false);
     setIsOnline(false);
     setAlerts([]);
@@ -156,25 +156,32 @@ export function WorkerOnlinePanel({ workerId, initialIsOnline }: { workerId: str
       {alerts.length > 0 && (
         <div className="mt-4 flex flex-col gap-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
           {alerts.map((a) => (
-            <div
-              key={a.sosId}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-red-300 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/30"
+            <div key={a.sosId}
+              className="flex flex-col gap-3 rounded-xl border-2 border-red-300 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/30"
             >
-              <div>
-                <p className="font-semibold text-red-700 dark:text-red-300">🚨 Emergency SOS nearby</p>
-                <p className="text-xs text-red-600 dark:text-red-400">
-                  {a.distanceKm != null ? `~${a.distanceKm} km away` : "Distance unknown"} ·{" "}
-                  {new Date(a.createdAt).toLocaleTimeString()}
-                </p>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-red-700 dark:text-red-300">🚨 Emergency SOS nearby</p>
+                  <p className="text-xs text-red-600 dark:text-red-400">
+                    {a.distanceKm != null ? `~${a.distanceKm} km away` : "Distance unknown"} ·{" "}
+                    {new Date(a.createdAt).toLocaleTimeString()}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={acceptingId === a.sosId}
+                  onClick={() => accept(a.sosId)}
+                  className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
+                >
+                  {acceptingId === a.sosId ? "Accepting…" : "Accept Emergency Call"}
+                </button>
               </div>
-              <button
-                type="button"
-                disabled={acceptingId === a.sosId}
-                onClick={() => accept(a.sosId)}
-                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
-              >
-                {acceptingId === a.sosId ? "Accepting…" : "Respond"}
-              </button>
+              {a.lat != null && a.lng != null && (
+                <div className="flex items-center gap-2 rounded-lg bg-red-100/60 px-3 py-1.5 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                  <span>📍</span>
+                  <span>Customer location: {a.lat.toFixed(4)}, {a.lng.toFixed(4)}</span>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -182,3 +189,6 @@ export function WorkerOnlinePanel({ workerId, initialIsOnline }: { workerId: str
     </div>
   );
 }
+
+
+

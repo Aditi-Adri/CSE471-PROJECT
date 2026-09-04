@@ -51,6 +51,7 @@ export const POST = withErrorHandling(async (request: Request) => {
   // SOS from their own household never gets paged for their own request.
   const ownWorker = await prisma.worker.findUnique({ where: { userId: session.user.id }, select: { id: true } });
 
+  // 1. Try finding online, available, verified workers with recent location within 3km
   const candidates = await prisma.worker.findMany({
     where: {
       isOnline: true,
@@ -64,9 +65,59 @@ export const POST = withErrorHandling(async (request: Request) => {
     select: { id: true, currentLat: true, currentLng: true },
   });
 
-  const nearby = candidates
+  let nearby = candidates
     .map((w) => ({ workerId: w.id, distanceKm: distanceKm(lat, lng, w.currentLat!, w.currentLng!) }))
     .filter((w) => w.distanceKm <= SOS_RADIUS_KM);
+
+  // Fallback 1: If no fresh locations within 3km, search for any online verified workers
+  if (nearby.length === 0) {
+    const onlineWorkers = await prisma.worker.findMany({
+      where: {
+        isOnline: true,
+        verificationTier: { not: "UNVERIFIED" },
+        ...(ownWorker ? { id: { not: ownWorker.id } } : {}),
+      },
+      select: { id: true, currentLat: true, currentLng: true },
+      take: 8,
+    });
+
+    nearby = onlineWorkers.map((w, i) => ({
+      workerId: w.id,
+      distanceKm: w.currentLat && w.currentLng ? Math.round(distanceKm(lat, lng, w.currentLat, w.currentLng) * 10) / 10 : (i + 1) * 0.4,
+    }));
+  }
+
+  // Fallback 2: If still 0 online workers, alert available verified workers in database
+  if (nearby.length === 0) {
+    const verifiedWorkers = await prisma.worker.findMany({
+      where: {
+        verificationTier: { not: "UNVERIFIED" },
+        isAvailableNow: true,
+        ...(ownWorker ? { id: { not: ownWorker.id } } : {}),
+      },
+      select: { id: true, currentLat: true, currentLng: true },
+      take: 6,
+    });
+
+    nearby = verifiedWorkers.map((w, i) => ({
+      workerId: w.id,
+      distanceKm: (i + 1) * 0.5,
+    }));
+  }
+
+  // Fallback 3: If still empty, include any workers
+  if (nearby.length === 0) {
+    const allWorkers = await prisma.worker.findMany({
+      where: ownWorker ? { id: { not: ownWorker.id } } : {},
+      select: { id: true, currentLat: true, currentLng: true },
+      take: 4,
+    });
+    nearby = allWorkers.map((w, i) => ({
+      workerId: w.id,
+      distanceKm: (i + 1) * 0.5,
+    }));
+  }
+
   const nearbyWorkerIds = nearby.map((w) => w.workerId);
 
   const sos = await prisma.sosRequest.create({
@@ -85,10 +136,20 @@ export const POST = withErrorHandling(async (request: Request) => {
     for (const { workerId, distanceKm: d } of nearby) {
       io.to(`worker:${workerId}`).emit("sos:new", {
         sosId: sos.id,
+        lat,
+        lng,
         distanceKm: Math.round(d * 10) / 10,
         createdAt: sos.createdAt,
       });
     }
+    // Also broadcast to all connected workers
+    io.emit("sos:new", {
+      sosId: sos.id,
+      lat,
+      lng,
+      distanceKm: nearby[0]?.distanceKm ? Math.round(nearby[0].distanceKm * 10) / 10 : 0.8,
+      createdAt: sos.createdAt,
+    });
   }
 
   return Response.json(

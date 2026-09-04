@@ -6,19 +6,12 @@ import { hireApplicantSchema } from "@/lib/validation/jobRequestSchema";
 import { checkRateLimit, getClientIp } from "@/lib/auth/rateLimit";
 import { withErrorHandling } from "@/lib/api/withErrorHandling";
 
-/**
- * POST /api/job-requests/[id]/hire
- * body: { workerId }
- *
- * The customer picking exactly one applicant. Only the customer who
- * posted the request can call this, and only for a worker who actually
- * applied. The status flip is a conditional update (same
- * race-condition guard the old single-claim PATCH used) so two
- * near-simultaneous hire clicks — or a customer double-clicking — can't
- * both succeed: whichever request lands first wins, the other gets a
- * 409. Other applicants' rows aren't deleted; they just stop being
- * actionable once the request is HIRED (see JobRequestApplication).
- */
+// POST /api/job-requests/[id]/hire
+// body: { workerId }
+// The customer picks exactly one applicant to hire. Only that
+// customer can call this, only for someone who actually applied.
+// The update only succeeds while status is still OPEN, so two hire
+// clicks at the same time can't both go through — the second gets a 409.
 export const POST = withErrorHandling(async (request: Request, { params }: { params: Promise<{ id: string }> }) => {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {

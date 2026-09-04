@@ -119,6 +119,9 @@ export const POST = withErrorHandling(async (request: Request) => {
       hourlyRateMinBdt,
       hourlyRateMaxBdt,
       yearsExperience,
+      // MODULE 3 -> Worker Subscription & Working Radius (new feature):
+      // not set explicitly — every new worker just gets the DB column's
+      // own default (1km, the free Basic plan's fixed radius).
       avatarSeed: session.user.id,
       categories: {
         create: allCategoryIds.map((categoryId, index) => ({ categoryId, isPrimary: index === 0 })),

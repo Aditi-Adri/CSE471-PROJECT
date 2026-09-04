@@ -5,12 +5,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { formatBdt } from "@/lib/types/shop";
 
 // FEATURE: Type definition for order display
 interface OrderHistoryItem {
   id: number;
   date: string;
   totalAmount: string;
+  // MODULE 4 (Shiva): present only when a coupon was applied at checkout.
+  discountBdt: number;
+  couponCode: string | null;
   items: Array<{ itemName: string; quantity: number }>;
 }
 
@@ -82,6 +86,11 @@ export function OrderHistory({ workerId }: OrderHistoryProps) {
               </span>
             ))}
           </div>
+          {order.couponCode && (
+            <p className="mt-1 text-xs font-medium text-green-700">
+              Coupon {order.couponCode} applied — saved {formatBdt(order.discountBdt)}
+            </p>
+          )}
         </div>
       ))}
     </div>

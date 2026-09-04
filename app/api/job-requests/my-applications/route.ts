@@ -3,18 +3,12 @@ import { authOptions } from "@/lib/auth/authOptions";
 import { prisma } from "@/lib/db";
 import { withErrorHandling } from "@/lib/api/withErrorHandling";
 
-/**
- * GET /api/job-requests/my-applications
- *
- * The signed-in worker's own applications — every request they've
- * applied to, newest first. This is the worker's side of the
- * "notification": once a request they applied to flips to HIRED, this
- * page shows whether they were the one picked, and if so, the
- * customer's name and phone number so they can actually get in touch —
- * withheld otherwise, same "don't hand out contact info before there's
- * a real match" posture the booking flow uses for the customer's
- * address.
- */
+// GET /api/job-requests/my-applications
+//
+// The signed-in worker's own applications, newest first. There's no
+// notification system, so this page is how a worker finds out
+// whether they got hired. Once hired, the customer's name and phone
+// number show up too — withheld from everyone who wasn't picked.
 export const GET = withErrorHandling(async () => {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
@@ -34,6 +28,7 @@ export const GET = withErrorHandling(async () => {
     orderBy: { appliedAt: "desc" },
     select: {
       id: true,
+      wageBdt: true,
       appliedAt: true,
       jobRequest: {
         select: {
@@ -47,15 +42,40 @@ export const GET = withErrorHandling(async () => {
           hiredWorkerId: true,
           hiredAt: true,
           customer: { select: { name: true, phone: true } },
+          partOrders: {
+            where: { workerId: worker.id },
+            select: { items: { select: { quantity: true, price: true } } },
+          },
         },
       },
     },
   });
 
-  const shaped = applications.map(({ jobRequest, ...application }) => {
-    const hired = jobRequest.hiredWorkerId === worker.id;
-    return {
-      ...application,
+  const shapedApplications = [];
+  for (const application of applications) {
+    const jobRequest = application.jobRequest;
+    const wasHired = jobRequest.hiredWorkerId === worker.id;
+
+    // Add up whatever parts this worker bought for this job.
+    let partsTotalBdt = 0;
+    for (const order of jobRequest.partOrders) {
+      for (const item of order.items) {
+        partsTotalBdt += item.quantity * item.price;
+      }
+    }
+
+    // Only reveal the customer's contact info once this worker is the
+    // one who was actually hired — everyone else just sees the job
+    // went to someone else.
+    let customer = null;
+    if (wasHired) {
+      customer = jobRequest.customer;
+    }
+
+    shapedApplications.push({
+      id: application.id,
+      wageBdt: application.wageBdt,
+      appliedAt: application.appliedAt,
       jobRequest: {
         id: jobRequest.id,
         description: jobRequest.description,
@@ -65,14 +85,13 @@ export const GET = withErrorHandling(async () => {
         status: jobRequest.status,
         createdAt: jobRequest.createdAt,
         hiredAt: jobRequest.hiredAt,
-        hired,
-        // Only reveal the customer once *this* worker is the one hired —
-        // everyone else who applied just sees the request went to
-        // someone else, not who or how to reach them.
-        customer: hired ? jobRequest.customer : null,
+        hired: wasHired,
+        customer,
+        partsTotalBdt,
+        totalBillBdt: application.wageBdt + partsTotalBdt,
       },
-    };
-  });
+    });
+  }
 
-  return Response.json({ applications: shaped });
+  return Response.json({ applications: shapedApplications });
 });

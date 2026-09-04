@@ -34,3 +34,24 @@ export const hireApplicantSchema = z.object({
 });
 
 export type HireApplicantInput = z.infer<typeof hireApplicantSchema>;
+
+/** POST /api/job-requests/[id]/apply — worker applies with a wage. */
+export const applyToJobSchema = z.object({
+  wageBdt: z.number().int().min(1, "Enter a wage.").max(1_000_000),
+});
+
+export type ApplyToJobInput = z.infer<typeof applyToJobSchema>;
+
+/** POST /api/job-requests/[id]/parts — hired worker buys parts for the job. */
+export const buyPartsSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        partId: z.string().min(1),
+        quantity: z.number().int().min(1).max(100),
+      })
+    )
+    .min(1, "Add at least one part."),
+});
+
+export type BuyPartsInput = z.infer<typeof buyPartsSchema>;

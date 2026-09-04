@@ -31,6 +31,17 @@ export const registerSchema = z
     password: passwordSchema,
     confirmPassword: z.string(),
     role: z.enum(PUBLIC_ROLES),
+    // MODULE 4 (Shiva): optional — someone else's referral code. A
+    // wrong/unknown code doesn't block sign-up (see the register
+    // route), so this is intentionally not validated against the
+    // database here, just shaped.
+    referralCode: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .max(20)
+      .optional()
+      .transform((value) => (value ? value : undefined)),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords don't match.",

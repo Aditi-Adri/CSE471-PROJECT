@@ -12,30 +12,19 @@ function parseIntParam(value: string | null): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-/**
- * GET /api/search?q=...&categoryId=&area=&minBudget=&maxBudget=&minTier=&availableNow=&sort=&page=&pageSize=
- *
- * This is the Smart Search + AI Category Mapping endpoint (Module 1,
- * Feature 2). Flow:
- *
- *   1. Parse + validate query params.
- *   2. Resolve a ServiceCategory either from an explicit `categoryId`
- *      filter, or by mapping the free-text `q` through
- *      lib/ai/categoryMapper.ts (free keyword engine, with an optional
- *      free-tier Groq call if GROQ_API_KEY is set).
- *   3. Build a filtered, sorted Prisma query from the remaining filters
- *      (area, budget range, verification tier, availability).
- *   4. Log the search (query text, matched category, method, timing) to
- *      SearchLog for analytics/audit.
- */
+// GET /api/search?q=...&categoryId=&area=&minBudget=&maxBudget=&minTier=&availableNow=&sort=&page=&pageSize=
+// The Smart Search endpoint. What it does, in order:
+//   1. Read and validate the query params.
+//   2. Work out a category — either from an explicit categoryId
+//      filter, or by mapping the typed text through the AI/keyword
+//      engine in lib/ai/categoryMapper.ts.
+//   3. Build a filtered, sorted worker query from the other filters.
+//   4. Save the search to SearchLog for analytics.
+// No sign-in required — anonymous visitors can search too — so this
+// is rate-limited by IP instead, same as the other public endpoints.
 export async function GET(request: Request) {
   const startedAt = Date.now();
 
-  // Deliberately no sign-in requirement — browsing search results is
-  // meant to work for anonymous visitors — but every other public
-  // endpoint in the app rate-limits by IP and this one didn't, which
-  // left it as the one place a script could hammer the DB (and the
-  // optional Groq call in mapQueryToCategory) for free.
   const ip = getClientIp(request);
   const rateLimit = checkRateLimit(`search:${ip}`, 60, 60 * 1000);
   if (!rateLimit.allowed) {
@@ -55,8 +44,8 @@ export async function GET(request: Request) {
       availableNow: searchParams.get("availableNow") === "true" ? true : undefined,
     },
     sort: searchParams.get("sort") || undefined,
-    page: parseIntParam(searchParams.get("page")),
-    pageSize: parseIntParam(searchParams.get("pageSize")),
+    page: parseIntParam(searchParams.get("page")) ?? 1,
+    pageSize: parseIntParam(searchParams.get("pageSize")) ?? 10,
   });
 
   if (!parsed.success) {
@@ -68,7 +57,7 @@ export async function GET(request: Request) {
 
   const { query, filters, sort, page, pageSize } = parsed.data;
 
-  // --- Step 1: resolve category -----------------------------------
+  // Step 1: work out which category this search is about.
   let resolvedCategoryId = filters.categoryId ?? null;
   let detectedCategory: { id: string; name: string; icon: string } | null = null;
   // "NONE" = no query and no category filter at all — the default
@@ -104,8 +93,8 @@ export async function GET(request: Request) {
     }
   }
 
-  // detectedCategory above may be missing `icon` when sourced from the
-  // keyword-matching query (which didn't select it) — fetch it cleanly.
+  // The category above might be missing its icon if it came from the
+  // keyword match — go fetch the full row so it's always complete.
   if (detectedCategory && !detectedCategory.icon) {
     const withIcon = await prisma.serviceCategory.findUnique({
       where: { id: detectedCategory.id },
@@ -114,7 +103,7 @@ export async function GET(request: Request) {
     if (withIcon) detectedCategory = withIcon;
   }
 
-  // --- Step 2: build + run the filtered worker query ----------------
+  // Step 2: build and run the filtered, sorted worker query.
   const where = buildWorkerWhere({
     categoryId: resolvedCategoryId,
     area: filters.area as DhakaArea | undefined,
@@ -162,34 +151,40 @@ export async function GET(request: Request) {
     }),
   ]);
 
-  const results = workers.map((w) => ({
-    id: w.id,
-    name: w.user.name,
-    headline: w.headline,
-    bio: w.bio,
-    area: w.area,
-    addressDetail: w.addressDetail,
-    hourlyRateMinBdt: w.hourlyRateMinBdt,
-    hourlyRateMaxBdt: w.hourlyRateMaxBdt,
-    verificationTier: w.verificationTier,
-    yearsExperience: w.yearsExperience,
-    isAvailableNow: w.isAvailableNow,
-    ratingAvg: w.ratingAvg,
-    ratingCount: w.ratingCount,
-    completedJobs: w.completedJobs,
-    trustScore: w.trustScore,
-    avatarSeed: w.avatarSeed,
-    categories: w.categories.map((wc) => ({ ...wc.category, isPrimary: wc.isPrimary })),
-  }));
+  // Reshape each worker into the flat object the frontend expects.
+  const results = [];
+  for (const w of workers) {
+    const categories = [];
+    for (const wc of w.categories) {
+      categories.push({ ...wc.category, isPrimary: wc.isPrimary });
+    }
+
+    results.push({
+      id: w.id,
+      name: w.user.name,
+      headline: w.headline,
+      bio: w.bio,
+      area: w.area,
+      addressDetail: w.addressDetail,
+      hourlyRateMinBdt: w.hourlyRateMinBdt,
+      hourlyRateMaxBdt: w.hourlyRateMaxBdt,
+      verificationTier: w.verificationTier,
+      yearsExperience: w.yearsExperience,
+      isAvailableNow: w.isAvailableNow,
+      ratingAvg: w.ratingAvg,
+      ratingCount: w.ratingCount,
+      completedJobs: w.completedJobs,
+      trustScore: w.trustScore,
+      avatarSeed: w.avatarSeed,
+      categories,
+    });
+  }
 
   const durationMs = Date.now() - startedAt;
 
-  // --- Step 3: log the search (best-effort, never blocks the response) --
-  // Skip logging the default "browse everyone" view (matchMethod "NONE")
-  // — only log when the customer actually expressed some intent, via
-  // text or an explicit category filter. The `!== "NONE"` check (rather
-  // than re-checking query.length) also lets TypeScript narrow
-  // `matchMethod` to Prisma's MatchMethod enum for the write below.
+  // Step 3: save the search for analytics — but only if the customer
+  // actually typed something or picked a category. Skip logging the
+  // plain "browse everyone" view. This never blocks the response.
   if (matchMethod !== "NONE") {
     prisma.searchLog
       .create({

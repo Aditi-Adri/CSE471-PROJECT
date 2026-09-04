@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { DHAKA_AREAS, AREA_LABEL_BY_VALUE } from "@/lib/constants/dhakaAreas";
 import { formatBdt } from "@/lib/format";
@@ -18,7 +19,7 @@ type JobRequestItem = {
   hasApplied: boolean;
 };
 
-/** A flat job budget, not an hourly rate — so no "/hr" suffix here, unlike a Worker's rate range. */
+// A flat job budget, not an hourly rate — no "/hr" suffix here.
 function formatBudget(minBdt: number | null, maxBdt: number | null): string | null {
   if (minBdt && maxBdt) return `${formatBdt(minBdt)}–${formatBdt(maxBdt)}`;
   if (minBdt) return `From ${formatBdt(minBdt)}`;
@@ -26,28 +27,27 @@ function formatBudget(minBdt: number | null, maxBdt: number | null): string | nu
   return null;
 }
 
-/**
- * The worker-facing browse/apply list at /dashboard/job-requests — the
- * mirror image of the customer's search: same "filter by area" idea,
- * pointed at open JobRequests instead of Workers. Any number of
- * workers can apply to the same request, so it stays listed here for
- * everyone else until the customer hires someone (see
- * /dashboard/my-applications for what happens after applying).
- *
- * Pre-fills the area filter from `?area=` if present — how the
- * opportunities heatmap's "Browse jobs here" links land you already
- * filtered instead of on the unfiltered full list. Read directly off
- * `window.location` (not `useSearchParams`) so this stays a plain
- * client component with no Suspense-boundary requirement on the page.
- */
+// The worker-facing browse/apply list at /dashboard/job-requests, with
+// an area filter. The filter reads straight from the URL (`?area=`)
+// instead of its own state, so a heatmap "Browse jobs here" link can
+// change the filter without needing the page to reload.
 export function JobRequestsList() {
-  const [area, setArea] = useState(() => {
-    if (typeof window === "undefined") return "";
-    return new URLSearchParams(window.location.search).get("area") ?? "";
-  });
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const area = searchParams.get("area") ?? "";
+
   const [requests, setRequests] = useState<JobRequestItem[] | null>(null);
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  // What each worker typed in the wage box, keyed by request id.
+  const [wageInputs, setWageInputs] = useState<Record<string, string>>({});
+
+  function setArea(newArea: string) {
+    const params = new URLSearchParams(searchParams);
+    if (newArea) params.set("area", newArea);
+    else params.delete("area");
+    router.replace(`/dashboard/job-requests?${params.toString()}`, { scroll: false });
+  }
 
   function refetch() {
     const url = area ? `/api/job-requests?area=${area}` : "/api/job-requests";
@@ -59,11 +59,21 @@ export function JobRequestsList() {
 
   useEffect(refetch, [area]);
 
+  // Worker applies to one job request with a wage.
   async function handleApply(id: string) {
+    const wageBdt = Number(wageInputs[id]);
+    if (!wageBdt || wageBdt <= 0) {
+      setMessage("Enter a wage first.");
+      return;
+    }
     setApplyingId(id);
     setMessage(null);
     try {
-      const res = await fetch(`/api/job-requests/${id}/apply`, { method: "POST" });
+      const res = await fetch(`/api/job-requests/${id}/apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wageBdt }),
+      });
       if (res.ok) {
         setMessage("Applied — see /dashboard/my-applications once the customer picks someone.");
         refetch();
@@ -123,14 +133,24 @@ export function JobRequestsList() {
                   Applied ✓
                 </button>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => handleApply(r.id)}
-                  disabled={applyingId === r.id}
-                  className={`${primaryButtonClasses} mt-1 self-start px-4 py-2`}
-                >
-                  {applyingId === r.id ? "Applying…" : "Apply for this job"}
-                </button>
+                <div className="mt-1 flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    placeholder="Your wage (BDT)"
+                    value={wageInputs[r.id] ?? ""}
+                    onChange={(e) => setWageInputs({ ...wageInputs, [r.id]: e.target.value })}
+                    className={`${inputClasses} w-40`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleApply(r.id)}
+                    disabled={applyingId === r.id}
+                    className={`${primaryButtonClasses} mt-0 px-4 py-2`}
+                  >
+                    {applyingId === r.id ? "Applying…" : "Apply for this job"}
+                  </button>
+                </div>
               )}
             </div>
           ))}

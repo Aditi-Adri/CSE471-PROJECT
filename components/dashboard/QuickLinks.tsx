@@ -1,15 +1,20 @@
 import Link from "next/link";
 import {
   ClipboardCheckIcon,
+  FlagIcon,
+  GraduationCapIcon,
+  GridIcon,
   IdCardIcon,
   MapPinIcon,
   MessageIcon,
   ShieldCheckIcon,
   SirenIcon,
+  StarIcon,
+  TagIcon,
   WrenchIcon,
 } from "@/components/marketing/icons";
 import type { Role } from "@/app/generated/prisma/client";
-import { ChevronRightIcon, SearchIcon } from "./icons";
+import { ChevronRightIcon, CrownIcon, SearchIcon } from "./icons";
 
 type QuickLink = {
   href: string;
@@ -27,8 +32,35 @@ type QuickLink = {
  */
 function getQuickLinks(role: Role, hasWorkerProfile: boolean): QuickLink[] {
   switch (role) {
-    case "CUSTOMER":
     case "CORPORATE":
+      return [
+        {
+          href: "/dashboard/corporate",
+          title: "Corporate Portal",
+          description: "Manage multi-property addresses, view aggregated billing, and book services.",
+          icon: GridIcon,
+        },
+        {
+          href: "/search",
+          title: "Find a technician",
+          description: "Search verified local workers by service, area, or budget.",
+          icon: SearchIcon,
+        },
+        {
+          href: "/bookings",
+          title: "My bookings",
+          description: "See who you've booked, negotiate a rate, and track the arrival code.",
+          icon: ClipboardCheckIcon,
+        },
+        {
+          href: "/sos",
+          title: "Emergency SOS",
+          description: "One tap alerts every verified technician online within 3km of you.",
+          icon: SirenIcon,
+        },
+      ];
+
+    case "CUSTOMER":
       return [
         {
           href: "/search",
@@ -53,6 +85,30 @@ function getQuickLinks(role: Role, hasWorkerProfile: boolean): QuickLink[] {
           title: "Emergency SOS",
           description: "One tap alerts every verified technician online within 3km of you.",
           icon: SirenIcon,
+        },
+        {
+          href: "/dashboard/favorites",
+          title: "My favorites",
+          description: "Workers you've saved — book them again without searching.",
+          icon: StarIcon,
+        },
+        {
+          href: "/dashboard/workshops",
+          title: "Workshops",
+          description: "Free and paid workshops and training programmes you can register for.",
+          icon: GraduationCapIcon,
+        },
+        {
+          href: "/dashboard/complaints",
+          title: "My complaints",
+          description: "Complaints you've filed against workers, and any admin reply.",
+          icon: FlagIcon,
+        },
+        {
+          href: "/dashboard/coupons",
+          title: "My coupons",
+          description: "Codes you can apply at checkout in the spare parts shop.",
+          icon: TagIcon,
         },
       ];
 
@@ -92,6 +148,24 @@ function getQuickLinks(role: Role, hasWorkerProfile: boolean): QuickLink[] {
           description: "A heatmap of which Dhaka neighborhoods need workers most, right now.",
           icon: MapPinIcon,
         },
+        {
+          href: "/dashboard/workshops",
+          title: "Workshops",
+          description: "Free and paid workshops and training programmes you can register for.",
+          icon: GraduationCapIcon,
+        },
+        {
+          href: "/dashboard/coupons",
+          title: "My coupons",
+          description: "Codes you can apply at checkout in the spare parts shop.",
+          icon: TagIcon,
+        },
+        {
+          href: "/dashboard/worker/subscription",
+          title: "Subscription",
+          description: "Upgrade your plan to widen your service radius and get more leads.",
+          icon: CrownIcon,
+        },
       ];
 
     case "ADMIN":
@@ -107,6 +181,24 @@ function getQuickLinks(role: Role, hasWorkerProfile: boolean): QuickLink[] {
           title: "Review moderation",
           description: "Fraud-flagged customer reviews, surfaced for a human decision.",
           icon: ShieldCheckIcon,
+        },
+        {
+          href: "/admin/workshops",
+          title: "Workshops",
+          description: "Create a free or paid workshop and see who has registered.",
+          icon: GraduationCapIcon,
+        },
+        {
+          href: "/admin/complaints",
+          title: "Complaints",
+          description: "What customers have reported about workers — resolve each one.",
+          icon: FlagIcon,
+        },
+        {
+          href: "/admin/coupons",
+          title: "Coupon management",
+          description: "Create and deactivate discount codes for the spare parts shop.",
+          icon: TagIcon,
         },
       ];
   }

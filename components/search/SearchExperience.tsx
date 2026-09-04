@@ -15,11 +15,10 @@ import { buildSearchUrl } from "@/lib/search/buildSearchUrl";
 import type { SortOption } from "@/lib/validation/searchSchema";
 import { EMPTY_FILTERS, type CategoryOption, type SearchApiResponse, type SearchFiltersState } from "@/lib/types/search";
 
+// The main search page: search box, filters, and results. Reads its
+// starting query/category from the URL, so links like "/search?q=..."
+// land already filled in instead of starting blank.
 export function SearchExperience() {
-  // Seed initial state from the URL — this is what makes links like
-  // "/search?q=..." (hero search box) and "/search?categoryId=..."
-  // (homepage category grid) actually land pre-filled, instead of
-  // silently dropping the intent the customer already expressed.
   const searchParams = useSearchParams();
   const initialQuery = searchParams.get("q") ?? "";
   const initialCategoryId = searchParams.get("categoryId");
@@ -39,10 +38,9 @@ export function SearchExperience() {
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [response, setResponse] = useState<SearchApiResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Tracks which request (url + retry attempt) the current `response`/
-  // `error` actually correspond to. Comparing against this — rather than
-  // a separate `loading` boolean set synchronously inside the effect —
-  // keeps every state update confined to the fetch's own callbacks.
+  // Remembers which request the current response/error actually came
+  // from, so we can tell "still loading" apart from "already done"
+  // just by comparing keys, instead of a separate loading flag.
   const [lastHandledKey, setLastHandledKey] = useState<string | null>(null);
 
   const debouncedFilters = useDebouncedValue(filters, 400);
@@ -62,9 +60,8 @@ export function SearchExperience() {
   const attemptKey = `${requestUrl}#${retryNonce}`;
   const loading = attemptKey !== lastHandledKey;
 
-  // There is always something to show: every technician by default,
-  // narrowed as soon as the customer types a description or sets a
-  // filter — so this effect runs unconditionally, on mount included.
+  // Runs on every search/filter/page change, mount included — there's
+  // always something to fetch, since "no query" still shows everyone.
   useEffect(() => {
     const controller = new AbortController();
 
@@ -148,11 +145,8 @@ export function SearchExperience() {
             />
           )}
 
-          {/* Typed something specific, but nothing matched any of our
-              service categories — rather than silently falling back to
-              "show everyone" with no explanation, say so, and offer to
-              post it as an open request instead. The full worker list
-              below still renders either way, so this never dead-ends. */}
+          {/* Customer typed something, but it didn't match any service
+              category — say so, and offer to post it as a request instead. */}
           {!loading && !error && response && !response.detectedCategory && submittedQuery.trim().length >= 2 && (
             <div className="flex flex-col gap-3 rounded-xl border border-dashed border-zinc-300 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-900/40">
               <p className="text-sm text-zinc-700 dark:text-zinc-300">

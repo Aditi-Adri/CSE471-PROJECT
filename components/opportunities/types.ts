@@ -1,11 +1,8 @@
 import type { DhakaArea } from "@/app/generated/prisma/client";
 
-/**
- * Client-safe mirror of lib/opportunities/demandScore.ts's
- * OpportunityArea — that file imports `@/lib/db` (server-only Prisma),
- * so client components fetch this shape as plain JSON from
- * GET /api/opportunities rather than importing the server type.
- */
+// Same shape as OpportunityArea in lib/opportunities/demandScore.ts.
+// Client components use this copy since they can't import server-only
+// Prisma code — they just get this shape as JSON from the API instead.
 export type OpportunityAreaData = {
   area: DhakaArea;
   label: string;

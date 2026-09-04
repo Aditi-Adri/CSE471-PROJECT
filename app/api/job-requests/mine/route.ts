@@ -3,19 +3,12 @@ import { authOptions } from "@/lib/auth/authOptions";
 import { prisma } from "@/lib/db";
 import { withErrorHandling } from "@/lib/api/withErrorHandling";
 
-/**
- * GET /api/job-requests/mine
- *
- * The requests the signed-in user has posted themselves — every
- * status, not just OPEN (see GET /api/job-requests, the worker-facing
- * browse list, which is the opposite: OPEN-only, not scoped to a
- * customer). While OPEN, this is where the customer reviews every
- * applicant's profile and picks one via POST .../hire — "using his
- * profile and everything." Once HIRED, it's how the customer finds
- * out and sees who they hired — no separate notification system
- * exists (that's Module 3's real-time chat/notifications, unbuilt);
- * checking this page is the notification, for now.
- */
+// GET /api/job-requests/mine
+//
+// The requests the signed-in customer has posted themselves, every
+// status. While OPEN, the customer sees every applicant here and
+// picks one to hire. Once HIRED, this also shows who they hired and
+// the total bill (wage + any parts bought for the job).
 const applicantWorkerSelect = {
   id: true,
   headline: true,
@@ -47,10 +40,55 @@ export const GET = withErrorHandling(async () => {
       hiredWorker: { select: applicantWorkerSelect },
       applications: {
         orderBy: { appliedAt: "asc" },
-        select: { id: true, appliedAt: true, worker: { select: applicantWorkerSelect } },
+        select: { id: true, wageBdt: true, appliedAt: true, worker: { select: applicantWorkerSelect } },
+      },
+      partOrders: {
+        select: { items: { select: { quantity: true, price: true } } },
       },
     },
   });
 
-  return Response.json({ requests });
+  // For each request, work out the parts total and, once hired, the
+  // combined bill (wage + parts).
+  const shapedRequests = [];
+  for (const request of requests) {
+    // Add up every part ever bought for this job.
+    let partsTotalBdt = 0;
+    for (const order of request.partOrders) {
+      for (const item of order.items) {
+        partsTotalBdt += item.quantity * item.price;
+      }
+    }
+
+    // Find the wage from the application that actually got hired.
+    let wageBdt = null;
+    for (const application of request.applications) {
+      if (application.worker.id === request.hiredWorker?.id) {
+        wageBdt = application.wageBdt;
+      }
+    }
+
+    let totalBillBdt = null;
+    if (wageBdt !== null) {
+      totalBillBdt = wageBdt + partsTotalBdt;
+    }
+
+    shapedRequests.push({
+      id: request.id,
+      description: request.description,
+      area: request.area,
+      budgetMinBdt: request.budgetMinBdt,
+      budgetMaxBdt: request.budgetMaxBdt,
+      status: request.status,
+      createdAt: request.createdAt,
+      hiredAt: request.hiredAt,
+      hiredWorker: request.hiredWorker,
+      applications: request.applications,
+      partsTotalBdt,
+      wageBdt,
+      totalBillBdt,
+    });
+  }
+
+  return Response.json({ requests: shapedRequests });
 });

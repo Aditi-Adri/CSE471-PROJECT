@@ -23,6 +23,9 @@ function makeBooking(overrides: Partial<Booking> = {}): Booking {
     completedAt: null,
     createdAt: new Date("2026-01-01"),
     updatedAt: new Date("2026-01-01"),
+    isCorporateBill: false,
+    corporatePropertyId: null,
+    requestedByRole: null,
     ...overrides,
   };
 }

@@ -39,7 +39,10 @@ export const POST = withErrorHandling(
       return Response.json({ error: "Too many attempts. Please try again shortly." }, { status: 429 });
     }
 
-    const worker = await prisma.worker.findUnique({ where: { userId: session.user.id } });
+    const worker = await prisma.worker.findUnique({
+      where: { userId: session.user.id },
+      include: { user: { select: { name: true } } },
+    });
     if (!worker) {
       return Response.json({ error: "Set up your worker profile first." }, { status: 404 });
     }
@@ -49,7 +52,10 @@ export const POST = withErrorHandling(
       return Response.json({ error: "SOS request not found." }, { status: 404 });
     }
     if (!sos.alertedWorkerIds.includes(worker.id)) {
-      return Response.json({ error: "This SOS request wasn't sent to you." }, { status: 403 });
+      await prisma.sosRequest.update({
+        where: { id: sos.id },
+        data: { alertedWorkerIds: { push: worker.id } },
+      });
     }
 
     const etaMinutes =
@@ -83,7 +89,15 @@ export const POST = withErrorHandling(
 
     const io = getIO();
     if (io) {
-      io.to(`sos:${sos.id}`).emit("sos:accepted", { sosId: sos.id, bookingId: booking.id, etaMinutes });
+      const acceptedPayload = {
+        sosId: sos.id,
+        bookingId: booking.id,
+        etaMinutes,
+        workerName: worker.user.name,
+      };
+      io.to(`sos:${sos.id}`).emit("sos:accepted", acceptedPayload);
+      io.emit("sos:accepted", acceptedPayload);
+
       for (const otherWorkerId of sos.alertedWorkerIds) {
         if (otherWorkerId !== worker.id) {
           io.to(`worker:${otherWorkerId}`).emit("sos:taken", { sosId: sos.id });

@@ -137,21 +137,44 @@ below have no matching models yet. `Review` now exists (Feature 1).
 | 3 | Jishan | Dispute resolution + escrow settlement (needs a payment gateway). Now has something real to attach to — `Booking.status` reaches `COMPLETED` for real | 🔴 Not built | — |
 | 4 | Sudiptha | Worker income intelligence dashboard + AI predictive planner (Groq). Now has real `agreedRateBdt`/`COMPLETED` bookings to aggregate | 🔴 Not built | — |
 
-## Module 3: Marketplace Monetization, Communication & Automated Ops — 🔴 none built yet
+**Adri's own addition, not one of the PDF's numbered features above**: customer complaints
+against a worker, resolved by an admin (optionally with a reply). Deliberately simple and
+**not** tied to a booking or payment — kept separate from Jishan's Module 2 F3 above (dispute
+resolution + escrow settlement) so the two won't collide when he builds it; this is closer to
+"report this worker" than a financial dispute. ✅ Built. Models `Complaint`/`ComplaintStatus`.
+`POST /api/complaints` (customer-only, filed from a worker's profile page —
+`components/complaints/FileComplaintForm.tsx` on `app/workers/[id]/page.tsx`),
+`GET /api/complaints/mine` (the customer's own, `app/dashboard/complaints`),
+`GET`/`POST /api/admin/complaints` (admin-only list + resolve-with-optional-reply,
+`app/admin/complaints`).
+
+## Module 3: Marketplace Monetization, Communication & Automated Ops — 🟡 partially started
 
 PDF lists 2 features per member here (numbering in the source PDF repeats 1–4 twice —
 this is that second pass).
 
-| Owner | Feature |
-|---|---|
-| Shiva | Worker SaaS subscription paid from in-app wallet balance → premium search ranking flag |
-| Shiva | Real-time job chat + notifications via Socket.IO. `server.ts` already runs a Socket.IO server for tracking — extend it, don't start a second one |
-| Adri | Spare parts e-commerce shop + inventory margin manager (catalog, markup, escrow-bill append, stock decrement) |
-| Adri | Admin verification lifecycle queue + ban enforcement — **extends** `app/admin/verifications`; read that first, don't duplicate |
-| Jishan | Platform financial analytics + commission ledger dashboard (job commissions + subscriptions + parts margin, by district) |
-| Jishan | Corporate multi-property subscription portal (B2B, recurring checks, caretaker permissions, aggregated billing) |
-| Sudiptha | Automated escrow expiry + wallet payout pipeline — hourly `node-cron` job, 48h no-dispute auto-release minus commission. Needs `node-cron` added to `package.json`. Now has a real `ARRIVED`→`COMPLETED` transition to hang the timeout off of |
-| Sudiptha | Dynamic multi-tier subscription plan selector (Silver/Gold radius tiers) driven by a `SubscriptionTiers` table |
+| Owner | Feature | Status | Files |
+|---|---|---|---|
+| Shiva | Worker SaaS subscription paid from in-app wallet balance → premium search ranking flag | 🔴 Not built | — |
+| Shiva | Real-time job chat + notifications via Socket.IO. `server.ts` already runs a Socket.IO server for tracking — extend it, don't start a second one | 🔴 Not built | — |
+| Adri | Spare parts e-commerce shop + inventory margin manager (catalog, markup, escrow-bill append, stock decrement) | 🟡 Partial — built the escrow-bill-append half on top of the existing Job Requests flow (not Sudiptha's shop/Item/Order — separate models, see below); markup/margin isn't in yet, `Part.price` is a single sell price | `JobRequestApplication.wageBdt` (worker states a price when applying, customer picks based on it), models `Part`/`PartOrder`/`PartOrderItem` (own catalog + order, tied to a real `JobRequest` via a real foreign key — not free text like `Order.jobId`). `POST /api/job-requests/[id]/apply` (now needs a wage), `GET /api/parts`, `POST /api/job-requests/[id]/parts` (hired worker buys parts, stock decrements in a transaction, only the actual hired worker can buy on that job). `mine`/`my-applications` both return `wageBdt` + `partsTotalBdt` + `totalBillBdt` — the combined bill the customer pays. `components/jobRequests/BuyPartsForm.tsx`. Seed: `prisma/seedParts.ts` |
+| Adri | Admin verification lifecycle queue + ban enforcement — **extends** `app/admin/verifications`; read that first, don't duplicate | 🔴 Not built | — |
+| Adri | Workshops & training programs — not one of the PDF's numbered features, a self-added extra. Admin creates a workshop or training programme, free or paid; any worker or customer can register. No real payment gateway — same simple approach as Parts Billing, registering just records the fee that was agreed | ✅ Built | Models `Workshop`/`WorkshopRegistration` (unique per workshop+user). `GET /api/workshops` (list, upcoming first, shows registrant count + whether the viewer already registered), `POST /api/workshops` (admin-only create), `POST /api/workshops/[id]/register` (any signed-in non-admin). Admin: `app/admin/workshops`, `components/workshops/AdminWorkshopsDashboard.tsx`. Worker/customer: `app/dashboard/workshops`, `components/workshops/WorkshopsList.tsx` |
+| Jishan | Platform financial analytics + commission ledger dashboard (job commissions + subscriptions + parts margin, by district) | 🔴 Not built | — |
+| Jishan | Corporate multi-property subscription portal (B2B, recurring checks, caretaker permissions, aggregated billing) | 🔴 Not built | — |
+| Sudiptha | Automated escrow expiry + wallet payout pipeline — hourly `node-cron` job, 48h no-dispute auto-release minus commission. Needs `node-cron` added to `package.json`. Now has a real `ARRIVED`→`COMPLETED` transition to hang the timeout off of | 🔴 Not built | — |
+| Sudiptha | Dynamic multi-tier subscription plan selector (Silver/Gold radius tiers) driven by a `SubscriptionTiers` table | ✅ Built (as "Worker Subscription & Working Radius") | Plan catalog is a static config, not a DB table — `lib/constants/subscriptionPlans.ts` — exactly 4 plans (Basic 1km free / Starter 2km / Standard 5km / Premium 15km, each with price + benefits), plus the one-time 30-day free Premium trial. (The database's `SubscriptionTier` enum also has an unused `UNLIMITED` value from an earlier draft — harmless, just not sold.) New model `SubscriptionOrder` (shaped just like `Order`, reuses `PaymentStatus`) + 4 new `Worker` columns (`serviceRadiusKm`, `subscriptionTier`, `subscriptionExpiresAt`, `subscriptionTrialUsed`) — migrations `20260820120000_worker_subscription_radius` and `20260821090000_starter_plan_basic_1km` (adds the `STARTER` tier + drops Basic's default to 1km), both fully additive. Reuses the exact SSLCommerz flow from the shop (`lib/payments/sslcommerz.ts`) via `lib/payments/confirmSubscriptionPayment.ts` / `failSubscriptionOrder.ts` and `app/api/subscription/checkout`, `app/api/subscription/payment/*`. Radius circle is drawn with the project's existing Leaflet + OpenStreetMap map stack (`components/subscription/WorkingRadiusMap.tsx`) — not Google Maps (see the tech-stack table above); clicking any plan card on `/dashboard/worker/subscription` previews that plan's radius on the map before buying. Worker-only page `app/dashboard/worker/subscription`, dashboard widget `components/subscription/SubscriptionStatusCard.tsx`. Every worker starts on Basic's fixed 1km — no profile-form choice needed anymore |
+
+## Module 4 — not in the PDF; own additions
+
+Not one of the PDF's numbered features — small, self-contained extras rather than
+something assigned. Simple by design, not meant to carry the same weight as the
+Module 1/2/3 rows above.
+
+| Owner | Feature | Status | Files |
+|---|---|---|---|
+| Adri | Favorite workers — customer stars a worker to rebook later without searching again | ✅ Built | Model `Favorite` (`customerId`, `workerId`, unique together). `POST /api/favorites/[workerId]` toggles star on/off, `GET /api/favorites` lists them. `components/favorites/FavoriteButton.tsx` on `app/workers/[id]/page.tsx` (customers only), `components/favorites/FavoritesList.tsx` on `/dashboard/favorites` |
+| Shiva | Referral codes + coupon system — any account can share its own referral code; signing up with one rewards both sides with a coupon. Admin creates/manages coupons independently. Applies at the one real money-moving checkout today, the Spare Parts Shop (`app/api/shop/orders`) | ✅ Built | Models `Coupon` (admin- or referral-issued; public or private via `issuedToUserId`), `CouponRedemption`; `User.referralCode`/`referredById`; `Order.discountBdt`. Pure logic: `lib/coupons/couponMath.ts` (discount amount), `lib/coupons/couponEligibility.ts` (usable-right-now check) — both unit-tested, same split as `trustScoreMath`/`demandScoreMath`. `lib/referrals/issueReferralReward.ts` issues the matching pair of coupons (10% off, capped ৳200, min order ৳300, 90-day expiry — `lib/referrals/referralConfig.ts`). Referral code entry is on the credentials `POST /api/auth/register` form only, not Google SSO. `POST /api/coupons/validate` (live checkout preview), `GET /api/coupons/mine`, `GET /api/referrals/me`, `GET/POST /api/admin/coupons`, `PATCH /api/admin/coupons/[id]`. UI: `components/coupons/ReferralCard.tsx` on `/account`, `components/coupons/MyCouponsList.tsx` on `/dashboard/coupons`, coupon field on `app/shop/cart`, `components/admin/CouponManager.tsx` on `/admin/coupons` |
 
 ## How to use this doc when asked to "build module X feature Y"
 
