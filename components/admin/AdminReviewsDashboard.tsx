@@ -30,6 +30,8 @@ export function AdminReviewsDashboard() {
   const [reviews, setReviews] = useState<ReviewItem[] | null>(null);
   const [tab, setTab] = useState<Tab>("flagged");
 
+  // Re-fetches the whole list after every hide/unhide, so the counts and
+  // tabs stay correct without tracking state by hand.
   const refetch = useCallback(() => {
     fetch("/api/admin/reviews")
       .then((res) => res.json())
@@ -40,6 +42,8 @@ export function AdminReviewsDashboard() {
     refetch();
   }, [refetch]);
 
+  // The tab badge counts flagged reviews still awaiting a decision —
+  // once hidden, it's been dealt with.
   const flaggedCount = useMemo(() => reviews?.filter((r) => r.fraudFlagged && !r.isHidden).length ?? 0, [reviews]);
 
   if (!reviews) {

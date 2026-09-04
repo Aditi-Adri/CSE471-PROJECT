@@ -46,10 +46,12 @@ export type HeuristicResult = {
   reasons: string[];
 };
 
+/** Lowercases and collapses repeated spaces so matching is consistent. */
 function normalize(text: string): string {
   return text.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+/** Escapes regex characters so a word like "n/a" can't break the pattern. */
 function escapeRegex(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -71,16 +73,19 @@ function hasExcessiveRepetition(text: string): boolean {
   return /([^\s])\1{4,}/.test(text);
 }
 
+/** Adds up suspicion points from each rule. Higher = more likely fake. */
 export function scoreReviewHeuristically(input: { rating: number; comment: string }): HeuristicResult {
   const comment = normalize(input.comment);
   const reasons: string[] = [];
   let score = 0;
 
+  // Too short to say anything real about a job.
   if (comment.length < 12) {
     score += 0.35;
     reasons.push("Comment is too short to describe an actual job.");
   }
 
+  // Exact-match filler, the kind a bot drops in to clear the field.
   if (GENERIC_PHRASES.has(comment)) {
     score += 0.3;
     reasons.push("Comment is generic, templated filler.");
@@ -89,6 +94,8 @@ export function scoreReviewHeuristically(input: { rating: number; comment: strin
   const negativeHits = countMatches(comment, NEGATIVE_WORDS);
   const positiveHits = countMatches(comment, POSITIVE_WORDS);
 
+  // Stars and words disagreeing is the strongest signal here — someone
+  // clicking a rating without reading what they pasted.
   if (input.rating >= 4 && negativeHits > 0 && positiveHits === 0) {
     score += 0.4;
     reasons.push("High star rating but the comment reads negative.");
@@ -109,5 +116,6 @@ export function scoreReviewHeuristically(input: { rating: number; comment: strin
     reasons.push("Comment is exclamation-mark spam.");
   }
 
+  // Capped at 1 so several rules firing at once can't overflow the scale.
   return { score: Math.min(score, 1), reasons };
 }

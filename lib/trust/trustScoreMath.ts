@@ -89,27 +89,35 @@ export type TrustBreakdown = {
   total: number;
 };
 
+/** Forces a number to stay inside min..max. */
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
+/** Rounds to one decimal place, e.g. 83.6703 -> 83.7. */
 function round1(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
 export function computeTrustScore(inputs: TrustMetricInputs): TrustBreakdown {
+  // Stars (1-5) -> 0-100. Subtract 1 first: the worst possible rating
+  // is 1 star, not 0, so a straight /5 would never reach 0.
   const ratingQuality =
     inputs.authenticReviewCount > 0
       ? clamp(((inputs.ratingAvg - 1) / 4) * 100, 0, 100)
       : NO_DATA_BASELINE;
 
+  // Of the jobs they agreed to do, what share did they actually finish?
   const completionReliability =
     inputs.postAcceptanceCount > 0
       ? clamp((inputs.completedCount / inputs.postAcceptanceCount) * 100, 0, 100)
       : NO_DATA_BASELINE;
 
+  // Straight lookup from the Module 1 F1 badge tier.
   const verificationTrust = VERIFICATION_TRUST_SCORE[inputs.verificationTier];
 
+  // Exponential decay — the score halves every RESPONSE_HALF_LIFE_MINUTES.
+  // 0 min = 100, 1 hr = 50, 2 hrs = 25.
   const responsiveness =
     inputs.avgResponseMinutes == null
       ? NO_DATA_BASELINE
@@ -124,12 +132,15 @@ export function computeTrustScore(inputs: TrustMetricInputs): TrustBreakdown {
       ? clamp(100 - (inputs.fraudFlaggedCount / inputs.totalNonHiddenReviewCount) * 100, 0, 100)
       : 100;
 
+  // Logarithmic, so the first few reviews add a lot and later ones add
+  // progressively less — 1 review scores 25, 5 score 65, 15 score 100.
   const reviewVolume = clamp(
     (100 * Math.log(1 + inputs.authenticReviewCount)) / Math.log(1 + REVIEW_VOLUME_CAP),
     0,
     100
   );
 
+  // Each metric multiplied by its weight, then added up.
   const total =
     ratingQuality * TRUST_WEIGHTS.ratingQuality +
     completionReliability * TRUST_WEIGHTS.completionReliability +

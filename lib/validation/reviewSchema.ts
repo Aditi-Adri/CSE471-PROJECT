@@ -5,10 +5,12 @@ import { z } from "zod";
  * Detection.
  */
 
+/** What a valid review submission looks like. Checked on the server. */
 export const submitReviewSchema = z.object({
   rating: z.number().int("Rating must be a whole number.").min(1, "Pick at least 1 star.").max(5, "5 stars is the max."),
   comment: z
     .string()
+    // .trim() runs before .min(), so 10 spaces isn't a valid comment.
     .trim()
     .min(10, "Say a little more about the job — at least 10 characters.")
     .max(1000, "Keep it under 1000 characters."),

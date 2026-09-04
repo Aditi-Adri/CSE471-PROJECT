@@ -35,6 +35,7 @@ export function ReviewForm({ bookingId, workerName }: { bookingId: string; worke
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState<ExistingReview>(null);
 
+  // Ask the server on mount whether this booking can be reviewed.
   useEffect(() => {
     fetch(`/api/bookings/${bookingId}/review`)
       .then((res) => res.json())
@@ -47,6 +48,8 @@ export function ReviewForm({ bookingId, workerName }: { bookingId: string; worke
 
   async function submit() {
     setError(null);
+    // Quick checks first so an obvious mistake doesn't need a round
+    // trip — the API re-checks all of this anyway.
     if (rating === 0) {
       setError("Pick a star rating.");
       return;
@@ -76,6 +79,7 @@ export function ReviewForm({ bookingId, workerName }: { bookingId: string; worke
     return <div className="h-24 animate-pulse rounded-2xl bg-zinc-100 dark:bg-zinc-900" />;
   }
 
+  // Already reviewed (just now, or on an earlier visit) — show it read-only.
   const review = submitted ?? existingReview;
   if (review) {
     return (
@@ -122,6 +126,8 @@ export function ReviewForm({ bookingId, workerName }: { bookingId: string; worke
         You have until {new Date(eligibility.deadline).toLocaleString()} to leave this review.
       </p>
 
+      {/* hoverRating is separate from rating so stars light up on
+          mouse-over before the click actually commits a value. */}
       <div className="flex items-center gap-1" onMouseLeave={() => setHoverRating(0)}>
         {[1, 2, 3, 4, 5].map((n) => (
           <button

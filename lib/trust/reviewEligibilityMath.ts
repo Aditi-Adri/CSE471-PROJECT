@@ -20,21 +20,30 @@ export type ReviewEligibility =
   | { eligible: true; deadline: Date }
   | { eligible: false; reason: ReviewEligibilityReason; deadline: Date | null };
 
+/**
+ * Three gates, checked in order. `now` is a parameter (not read from
+ * the clock inside) so the tests can check the exact 72h boundary.
+ */
 export function computeReviewEligibility(
   booking: Pick<Booking, "status" | "completedAt">,
   hasExistingReview: boolean,
   now: Date = new Date()
 ): ReviewEligibility {
+  // Gate 1: the job must really be finished — status comes from the
+  // database, not from the customer saying so.
   if (booking.status !== "COMPLETED" || !booking.completedAt) {
     return { eligible: false, reason: "not_completed", deadline: null };
   }
 
+  // The clock runs from completion, not from booking time.
   const deadline = new Date(booking.completedAt.getTime() + REVIEW_WINDOW_MS);
 
+  // Gate 2: one review per job.
   if (hasExistingReview) {
     return { eligible: false, reason: "already_reviewed", deadline };
   }
 
+  // Gate 3: still inside the 72-hour window.
   if (now > deadline) {
     return { eligible: false, reason: "window_expired", deadline };
   }

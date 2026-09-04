@@ -20,10 +20,12 @@ import { withErrorHandling } from "@/lib/api/withErrorHandling";
  *        other trigger).
  */
 export const GET = withErrorHandling(async () => {
+  // Admin check on the server — hiding the link in the UI secures nothing.
   const auth = await requireAdminSession();
   if (!auth.ok) return auth.response;
 
   const reviews = await prisma.review.findMany({
+    // Flagged first: those are the ones needing a human decision.
     orderBy: [{ fraudFlagged: "desc" }, { createdAt: "desc" }],
     include: {
       customer: { select: { name: true, email: true } },
@@ -54,10 +56,12 @@ export const POST = withErrorHandling(async (request: Request) => {
     return Response.json({ error: "Review not found." }, { status: 404 });
   }
 
+  // update, never delete — hiding stays reversible and keeps the record.
   await prisma.review.update({
     where: { id: reviewId },
     data: { isHidden: action === "hide" },
   });
+  // Hiding pulls the review straight out of the rating average too.
   await recomputeTrustScore(review.workerId);
 
   return Response.json({ status: action });

@@ -57,17 +57,25 @@ export const POST = withErrorHandling(
   async (request: Request, { params }: { params: Promise<{ id: string }> }) => {
     const { id } = await params;
 
+    // Checks run cheapest-first: no point paying for a Groq call on a
+    // request that was going to be rejected for not being signed in.
+
+    // 1. Signed in?
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return Response.json({ error: "You must be signed in." }, { status: 401 });
     }
 
+    // 2. Not spamming? Max 10 attempts per 10 minutes.
     const ip = getClientIp(request);
     const rateLimit = checkRateLimit(`booking-review:${session.user.id}:${ip}`, 10, 10 * 60 * 1000);
     if (!rateLimit.allowed) {
       return Response.json({ error: "Too many attempts. Please try again shortly." }, { status: 429 });
     }
 
+    // 3. Is this your booking, and are you the customer on it? Without
+    // this, any signed-in user could review any booking by guessing an
+    // id. 404 rather than 403 so we don't confirm the booking exists.
     const { booking, viewer } = await loadBookingWithViewerRole(id, session);
     if (!booking || viewer !== "customer") {
       return Response.json({ error: "Booking not found." }, { status: 404 });
@@ -76,6 +84,7 @@ export const POST = withErrorHandling(
       return Response.json({ error: "This booking has no assigned technician to review." }, { status: 409 });
     }
 
+    // 4. Is the data itself valid? (1-5 stars, 10-1000 chars)
     const body = await request.json().catch(() => null);
     const parsed = submitReviewSchema.safeParse(body);
     if (!parsed.success) {
@@ -85,14 +94,21 @@ export const POST = withErrorHandling(
       );
     }
 
+    // 5. Completed, unreviewed, and still inside the 72h window? Same
+    // function the GET above uses, so the form and the save can never
+    // disagree about the rules.
     const eligibility = await getReviewEligibilityForBooking(booking.id);
     if (!eligibility.eligible) {
       return Response.json({ error: eligibilityErrorMessage(eligibility.reason) }, { status: 409 });
     }
 
+    // 6. Screen it for fraud — this decides the flag, it never blocks
+    // the review from being saved.
     const { rating, comment } = parsed.data;
     const fraud = await detectReviewFraud({ rating, comment, workerId: booking.workerId });
 
+    // 7. Save, then refresh the worker's cached score with the new review
+    // included.
     const review = await prisma.review.create({
       data: {
         bookingId: booking.id,

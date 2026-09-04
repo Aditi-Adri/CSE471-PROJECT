@@ -4,6 +4,7 @@
  * VerificationBadge/RatingStars so it reads as part of the same
  * family rather than a bolted-on extra.
  */
+/** Turns the 0-100 number into a label and colour band. */
 function tierFor(score: number): { label: string; className: string; dot: string } {
   if (score >= 80) {
     return { label: "Excellent trust", className: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300", dot: "bg-emerald-500" };
@@ -18,6 +19,7 @@ function tierFor(score: number): { label: string; className: string; dot: string
 }
 
 export function TrustScoreBadge({ score, compact = false }: { score: number | null; compact?: boolean }) {
+  // Null only in the brief window before a new worker's first recompute.
   if (score == null) return null;
   const tier = tierFor(score);
 

@@ -37,6 +37,7 @@ const POST_ACCEPTANCE_STATUSES = ["CONFIRMED", "ARRIVED", "COMPLETED", "CANCELLE
 // and 200 is already far more than enough to average out noise.
 const MAX_RESPONSE_SAMPLES = 200;
 
+/** Runs the queries behind all six metrics. Returns null if no such worker. */
 async function loadTrustInputs(workerId: string) {
   const worker = await prisma.worker.findUnique({
     where: { id: workerId },
@@ -44,6 +45,8 @@ async function loadTrustInputs(workerId: string) {
   });
   if (!worker) return null;
 
+  // Promise.all runs all four queries at the same time instead of one
+  // after another — same result, roughly a quarter of the wait.
   const [reviews, postAcceptanceCount, completedCount, respondedBookings] = await Promise.all([
     prisma.review.findMany({
       where: { workerId, isHidden: false },
@@ -59,12 +62,16 @@ async function loadTrustInputs(workerId: string) {
     }),
   ]);
 
+  // Fraud-flagged reviews are dropped here, so a fake review can never
+  // move the rating average — this is where the two halves of the
+  // feature meet.
   const authenticReviews = reviews.filter((r) => !r.fraudFlagged);
   const ratingAvg =
     authenticReviews.length > 0
       ? authenticReviews.reduce((sum, r) => sum + r.rating, 0) / authenticReviews.length
       : 0;
 
+  // Minutes between the request arriving and the worker's first reply.
   const avgResponseMinutes =
     respondedBookings.length > 0
       ? respondedBookings.reduce(

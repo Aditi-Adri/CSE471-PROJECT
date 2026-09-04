@@ -44,10 +44,13 @@ export async function detectReviewFraud(input: {
   let reason: string;
   let method: FraudCheckMethod;
 
+  // Layer 1: try the AI, but only if a key is configured. Returns null
+  // on any failure (no key, timeout, network error, bad JSON).
   const aiResult = apiKey
     ? await classifyReviewWithGroq({ rating: input.rating, comment: input.comment }, { apiKey })
     : null;
 
+  // Layer 2: whichever path answered, we end up with one 0..1 score.
   if (aiResult) {
     score = aiResult.score;
     reason = aiResult.reason;
@@ -59,6 +62,10 @@ export async function detectReviewFraud(input: {
     method = "HEURISTIC";
   }
 
+  // Layer 3: always runs. Neither the AI nor the heuristic can spot a
+  // duplicate, because each review looks fine on its own — only the
+  // database knows the same sentence was used before. Math.max raises
+  // the score but never lowers an already-higher one.
   if (await hasDuplicateComment(input.comment, input.workerId)) {
     score = Math.max(score, 0.75);
     reason = "Near-identical comment already exists for this worker.";
@@ -72,8 +79,11 @@ export async function detectReviewFraud(input: {
   };
 }
 
+/** Has this exact comment already been left for this worker? */
 async function hasDuplicateComment(comment: string, workerId: string): Promise<boolean> {
   const normalized = comment.trim();
+  // Very short comments repeat by coincidence ("good"), so skip them —
+  // the heuristic already penalises those separately.
   if (normalized.length < MIN_LENGTH_FOR_DUPLICATE_CHECK) return false;
 
   const existing = await prisma.review.findFirst({

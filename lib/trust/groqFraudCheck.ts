@@ -30,6 +30,8 @@ export async function classifyReviewWithGroq(
   const { apiKey, model = DEFAULT_MODEL, timeoutMs = DEFAULT_TIMEOUT_MS } = opts;
   if (!apiKey || !input.comment.trim()) return null;
 
+  // Cancels the request if Groq takes too long — without this the
+  // customer would sit on a frozen "Submitting…" button.
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -43,7 +45,10 @@ export async function classifyReviewWithGroq(
       },
       body: JSON.stringify({
         model,
+        // 0 = no randomness, so the same review always scores the same.
         temperature: 0,
+        // Forces valid JSON back instead of a chatty sentence that
+        // JSON.parse below would choke on.
         response_format: { type: "json_object" },
         messages: [
           {
@@ -75,6 +80,7 @@ export async function classifyReviewWithGroq(
     if (typeof parsed.fraudScore !== "number") return null;
 
     return {
+      // Never trust the model to stay in range — clamp it to 0..1.
       score: Math.min(Math.max(parsed.fraudScore, 0), 1),
       reason: parsed.reason?.trim() || "Flagged by AI review.",
     };
